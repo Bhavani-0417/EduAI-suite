@@ -3,7 +3,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.db.database import engine, Base
 
-# This creates all tables in the database automatically
+# Import all models so SQLAlchemy knows about them
+# This must happen BEFORE create_all
+from app.models import user, college, academic, notes, career, roadmap, events, vault
+
+# Import routers
+from app.api.routes import auth
+
+# Create all tables in database automatically
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
@@ -15,13 +22,21 @@ app = FastAPI(
 # CORS — allows React frontend to talk to this backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # React dev server
+    allow_origins=["http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Health check — always have this
+# ─────────────────────────────────────────
+# REGISTER ALL ROUTERS
+# ─────────────────────────────────────────
+app.include_router(auth.router)
+
+
+# ─────────────────────────────────────────
+# BASE ROUTES
+# ─────────────────────────────────────────
 @app.get("/")
 async def root():
     return {
