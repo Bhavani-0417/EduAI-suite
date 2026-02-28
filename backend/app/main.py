@@ -8,7 +8,7 @@ from app.db.database import engine, Base
 from app.models import user, college, academic, notes, career, roadmap, events, vault
 
 # Import routers
-from app.api.routes import auth, colleges, academic, notes, content
+from app.api.routes import auth, colleges, academic, notes, content, career
 
 # Create all tables in database automatically
 Base.metadata.create_all(bind=engine)
@@ -38,6 +38,7 @@ app.include_router(colleges.router)
 app.include_router(academic.router)
 app.include_router(notes.router)
 app.include_router(content.router)
+app.include_router(career.router)
 # ─────────────────────────────────────────
 # BASE ROUTES
 # ─────────────────────────────────────────
