@@ -8,13 +8,13 @@ from app.db.database import engine, Base
 from app.models import user, college, academic, notes, career, roadmap, events, vault
 
 # Import routers
-from app.api.routes import auth, colleges, academic, notes, content, career, chat
+from app.api.routes import auth, colleges, academic, notes, content, career, chat, roadmap, vault, notifications
 
 # Create all tables in database automatically
 Base.metadata.create_all(bind=engine)
 import os
 os.makedirs("generated_files", exist_ok=True)
-
+os.makedirs("vault_files", exist_ok=True)
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
@@ -40,6 +40,9 @@ app.include_router(notes.router)
 app.include_router(content.router)
 app.include_router(career.router)
 app.include_router(chat.router)
+app.include_router(roadmap.router)
+app.include_router(vault.router)
+app.include_router(notifications.router)
 # ─────────────────────────────────────────
 # BASE ROUTES
 # ─────────────────────────────────────────
