@@ -117,9 +117,13 @@ def register_user(db: Session, request: RegisterRequest) -> User:
     # If college_id provided, verify it actually exists
     if request.college_id:
         from app.models.college import College
-        college = db.query(College).filter(
-            College.id == request.college_id
-        ).first()
+        college = None
+
+        if request.college_id:
+            college = db.query(College).filter(
+                (College.id == request.college_id) |
+                (College.name.ilike(f"%{request.college_id}%"))
+            ).first()
         if not college:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -132,15 +136,14 @@ def register_user(db: Session, request: RegisterRequest) -> User:
 
     # Create user
     new_user = User(
-        full_name=request.full_name,
-        email=request.email,
-        hashed_password=hashed_pw,
-        college_id=request.college_id,
-        branch=request.branch,
-        year=request.year,
-        semester=request.semester,
-        city=request.city,
-    )
+    full_name=request.name,   # map name → full_name
+    email=request.email,
+    hashed_password=hashed_pw,
+    college_id=request.college_id,
+    branch=request.branch,
+    year=int(request.year),   # convert safely
+    role=request.role
+)
 
     db.add(new_user)
     db.commit()

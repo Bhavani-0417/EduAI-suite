@@ -9,14 +9,14 @@ from app.models.user import UserRole, Branch
 
 class RegisterRequest(BaseModel):
     """Data needed to create a new account"""
-    full_name: str
+    name: str
     email: EmailStr          # auto validates email format
     password: str
-    college_id: Optional[str] = None
-    branch: Optional[Branch] = None
-    year: Optional[int] = None
-    semester: Optional[int] = None
-    city: Optional[str] = None
+    college_id: str
+    branch: str
+    year: int | str
+    role: str = "student"
+    
 
     class Config:
         # This allows using enum values like "student" instead of UserRole.STUDENT
