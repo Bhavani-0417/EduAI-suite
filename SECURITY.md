@@ -12,6 +12,8 @@ EduAI Suite is an evolving portfolio project. It has not undergone an independen
 - Download responses use sanitized filenames, reject path traversal and symlink escapes, and set no-store/nosniff headers.
 - Event creation/seeding, college catalog mutations, and college branding updates require an administrator account.
 - Generated output files still share one application directory and do not yet have per-user ownership metadata. Path checks prevent traversal, but they do not provide strong cross-user artifact isolation; do not store or serve private real-user exports in a public multi-user deployment until per-user artifact ownership is implemented.
+- New learning-note uploads use Cloudinary's `authenticated` delivery type, and authenticated note API responses mint short-lived signed download URLs. Legacy notes that still contain a public Cloudinary URL are no longer re-emitted by the notes API, but the old Cloudinary assets remain public until separately converted to authenticated delivery or deleted.
+- Extracted note text, AI summaries, and ChromaDB embeddings are still stored without application-level encryption; do not treat the notes feature as suitable for real sensitive records yet.
 - Voice uploads accept WAV/MP3/M4A/WebM and are limited to 15 MB. Extension and size checks are not a substitute for media decoding in a sandbox or malware scanning.
 - Existing generated documents and encrypted blobs already committed to the repository are not removed by \`.gitignore\`. Review their content and provenance. If sensitive material was committed, removing it from the latest tree is not enough; Git history may also need rewriting and credentials may need rotation.
 

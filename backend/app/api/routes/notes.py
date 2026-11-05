@@ -6,6 +6,7 @@ from datetime import datetime
 from app.db.database import get_db
 from app.schemas.notes_schema import AskQuestionRequest
 from app.services.notes.notes_service import upload_note, get_notes, ask_question
+from app.utils.note_cloudinary import resolve_note_asset_url
 from app.api.middlewares.auth_middleware import get_current_user
 from app.models.user import User
 
@@ -44,7 +45,7 @@ def upload(
         "topic": note.topic,
         "chapter": note.chapter,
         "summary": note.summary,
-        "file_url": note.file_url,
+        "file_url": resolve_note_asset_url(note.file_url, note.file_type),
         "created_at": str(note.created_at)
     }
 
@@ -70,7 +71,7 @@ def list_notes(
             "chapter": note.chapter,
             "file_name": note.file_name,
             "file_type": note.file_type,
-            "file_url": note.file_url,
+            "file_url": resolve_note_asset_url(note.file_url, note.file_type),
             "summary": note.summary,
             "source": note.source.value if note.source else "student",
             "created_at": str(note.created_at)
