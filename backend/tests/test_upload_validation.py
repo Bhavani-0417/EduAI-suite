@@ -34,12 +34,6 @@ def test_rejects_path_components(file_name):
         validate_vault_upload(file_name, 1024)
 
 
-@pytest.mark.parametrize("file_name", ["a" * 256 + ".pdf", "bad\\nname.pdf"])
-def test_rejects_oversized_or_control_character_file_names(file_name):
-    with pytest.raises(ValueError):
-        validate_vault_upload(file_name, 1024)
-
-
 @pytest.mark.parametrize("file_name", ["a" * 256 + ".pdf", "bad\nname.pdf"])
 def test_rejects_oversized_or_control_character_file_names(file_name):
     with pytest.raises(ValueError):
