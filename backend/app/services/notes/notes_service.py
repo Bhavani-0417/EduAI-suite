@@ -6,6 +6,12 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException, UploadFile, status
 
 from app.models.notes import Note, NoteSource
+from app.utils.note_upload_validation import (
+    MAX_NOTE_UPLOAD_BYTES,
+    validate_note_file_content,
+    validate_note_upload,
+)
+from app.utils.file_storage import safe_filename_fragment
 from app.services.ai.chroma_service import (
     add_to_collection, search_collection, delete_from_collection
 )
@@ -121,7 +127,7 @@ def upload_to_cloudinary(file_bytes: bytes, file_name: str, student_id: str) -> 
         result = cloudinary.uploader.upload(
             file_bytes,
             folder=f"eduai/notes/{student_id}",
-            public_id=f"{uuid.uuid4()}_{file_name}",
+            public_id=f"{uuid.uuid4()}_{safe_filename_fragment(file_name.rsplit('.', 1)[0], 80)}",
             resource_type="auto"
         )
         
@@ -154,19 +160,24 @@ def upload_note(
     8. Save note record to PostgreSQL
     """
     
-    # Step 1 — Read file
-    file_bytes = file.file.read()
-    file_name = file.filename
-    
-    # Step 2 — Detect file type
-    extension = file_name.split(".")[-1].lower()
-    allowed_types = ["pdf", "jpg", "jpeg", "png", "bmp", "tiff"]
-    if extension not in allowed_types:
+    # Bound the read before parsing or sending the file to a cloud provider.
+    file_name = file.filename or ""
+    file_bytes = file.file.read(MAX_NOTE_UPLOAD_BYTES + 1)
+    if len(file_bytes) > MAX_NOTE_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Note uploads must be 10 MB or smaller.",
+        )
+
+    try:
+        extension = validate_note_upload(file_name, len(file_bytes))
+        validate_note_file_content(extension, file_bytes)
+    except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File type .{extension} not supported. Use: {', '.join(allowed_types)}"
-        )
-    
+            detail=str(exc),
+        ) from exc
+
     # Step 3 — Upload to Cloudinary
     print(f"📤 Uploading {file_name} to Cloudinary...")
     file_url = upload_to_cloudinary(file_bytes, file_name, student_id)
