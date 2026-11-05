@@ -8,7 +8,7 @@ from app.db.database import get_db
 from app.services.vault.vault_service import (
     upload_vault_document, get_vault_documents,
     download_vault_document, generate_share_link,
-    download_via_share_token
+    download_via_share_token, delete_vault_document
 )
 from app.api.middlewares.auth_middleware import get_current_user
 from app.models.user import User
@@ -96,7 +96,7 @@ def download_document(
 @router.post("/share/{doc_id}")
 def create_share_link(
     doc_id: str,
-    expire_hours: int = Query(24, description="Link expires after this many hours"),
+    expire_hours: int = Query(24, ge=1, le=168, description="Link expires after 1 to 168 hours"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -111,6 +111,17 @@ def create_share_link(
     return generate_share_link(
         db, doc_id, current_user.id, expire_hours
     )
+
+
+@router.delete("/{doc_id}")
+def delete_document(
+    doc_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete a vault document owned by the authenticated user."""
+    delete_vault_document(db, doc_id, current_user.id)
+    return {"message": "Document deleted."}
 
 
 @router.get("/share/{token}")

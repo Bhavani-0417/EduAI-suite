@@ -1,3 +1,4 @@
+import logging
 import os
 import uuid
 import secrets
@@ -8,7 +9,9 @@ from fastapi import HTTPException, UploadFile, status
 from app.models.vault import VaultDocument, DocumentType
 from app.services.vault.encryption_service import encrypt_file, decrypt_file
 from app.services.notes.notes_service import extract_text
+from app.utils.upload_validation import MAX_VAULT_UPLOAD_BYTES, validate_vault_upload
 
+logger = logging.getLogger(__name__)
 OUTPUT_DIR = "vault_files"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -30,16 +33,22 @@ def upload_vault_document(
     5. Save metadata to PostgreSQL
     """
 
-    file_bytes = file.file.read()
-    file_name = file.filename
-    extension = file_name.split(".")[-1].lower()
+    file_name = file.filename or ""
+    file_bytes = file.file.read(MAX_VAULT_UPLOAD_BYTES + 1)
 
-    allowed = ["pdf", "jpg", "jpeg", "png", "bmp"]
-    if extension not in allowed:
+    if len(file_bytes) > MAX_VAULT_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Vault files must be 10 MB or smaller."
+        )
+
+    try:
+        extension = validate_vault_upload(file_name, len(file_bytes))
+    except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File type .{extension} not allowed in vault."
-        )
+            detail=str(exc)
+        ) from exc
 
     # Step 1 — Extract text for OCR search
     print(f"📝 Extracting text from {file_name}...")
@@ -208,3 +217,43 @@ def download_via_share_token(
 
     decrypted_bytes = decrypt_file(encrypted_bytes)
     return decrypted_bytes, doc.file_name
+
+def delete_vault_document(
+    db: Session,
+    doc_id: str,
+    student_id: str
+) -> None:
+    """Delete a document owned by the student and its encrypted file."""
+    doc = db.query(VaultDocument).filter(
+        VaultDocument.id == doc_id,
+        VaultDocument.student_id == student_id
+    ).first()
+
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found in vault."
+        )
+
+    vault_root = os.path.realpath(OUTPUT_DIR)
+    encrypted_path = os.path.realpath(doc.encrypted_url)
+    try:
+        is_inside_vault = os.path.commonpath([vault_root, encrypted_path]) == vault_root
+    except ValueError:
+        is_inside_vault = False
+
+    if not is_inside_vault:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Stored document path is outside the vault directory."
+        )
+
+    db.delete(doc)
+    db.commit()
+
+    try:
+        os.remove(encrypted_path)
+    except FileNotFoundError:
+        pass
+    except OSError:
+        logger.exception("Vault metadata was deleted, but encrypted file cleanup failed.")

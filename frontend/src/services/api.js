@@ -103,13 +103,16 @@ export const chatAPI = {
 
 // ─── Document Vault ──────────────────────────────────────────────────────────
 export const vaultAPI = {
-  getDocuments: () => api.get('/api/vault/documents'),
+  getDocuments: () => api.get('/api/vault/'),
   uploadDocument: (file, docType) => {
-    const fd = new FormData(); fd.append('file', file); fd.append('doc_type', docType);
-    return api.post('/api/vault/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post('/api/vault/upload', fd, { params: { doc_type: docType } });
   },
-  shareDocument: (id, hours) => api.post(`/api/vault/documents/${id}/share`, { expiry_hours: hours }),
-  deleteDocument: (id) => api.delete(`/api/vault/documents/${id}`),
+  shareDocument: (id, hours) => api.post(`/api/vault/share/${id}`, null, {
+    params: { expire_hours: hours },
+  }),
+  deleteDocument: (id) => api.delete(`/api/vault/${id}`),
 };
 
 // ─── Code Explainer ──────────────────────────────────────────────────────────
