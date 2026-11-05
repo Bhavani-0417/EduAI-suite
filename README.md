@@ -53,6 +53,7 @@ EduAI-suite/
 │   │   ├── schemas/      # Request and response schemas
 │   │   ├── services/     # AI, academic, career, content, and vault logic
 │   │   └── utils/        # Shared helpers
+│   ├── scripts/        # Trusted one-off setup and data migrations
 │   ├── tests/
 │   └── requirements.txt
 ├── frontend/
@@ -156,9 +157,8 @@ GitHub Actions runs lightweight backend unit tests, Python bytecode compilation,
 Run backend checks from `backend/`:
 
 ```bash
-python -m pip install pytest
 python -m pytest tests -q
-python -m compileall -q app
+python -m compileall -q app scripts
 ```
 
 Run the frontend build from `frontend/`:
@@ -173,9 +173,10 @@ These checks do not replace database-backed integration tests, browser tests, or
 ## Data, privacy, and security
 
 - Use synthetic/demo accounts and files. Do not upload real identity documents, academic records, or other sensitive personal data to a public demo.
-- The vault uses Fernet authenticated encryption. Its current key derivation is tied to `SECRET_KEY`; changing that secret without a migration can make existing encrypted files impossible to decrypt.
-- Share tokens are bearer links: anyone who obtains a valid, unexpired link can download that document.
-- Vault uploads are limited to 10 MB and supported extensions are PDF, PNG, JPG/JPEG, and BMP.
+- The vault uses Fernet authenticated encryption for files and new OCR text. Legacy plaintext OCR rows require the documented migration; the document-key derivation remains unchanged for existing encrypted files.
+- Share tokens are revocable bearer links: anyone who obtains a valid, unexpired link can download that document until its owner revokes it or it expires.
+- Vault uploads are limited to 10 MB and check PDF/image signatures as well as supported extensions. This is not malware scanning or complete parser validation.
+- Downloads use sanitized attachment filenames and no-store cache headers. Back up the database and vault directory before migrating legacy OCR data with `python -m scripts.migrate_vault_ocr` from `backend/`.
 - Generated documents and vault uploads are runtime data. Ignore rules do not remove files already committed to Git; review those separately before deleting them or rewriting history.
 - This is a portfolio/development application, not a certified document-management or production security product.
 

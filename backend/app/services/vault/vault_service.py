@@ -4,6 +4,7 @@ import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 
+from cryptography.fernet import InvalidToken
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
@@ -19,7 +20,7 @@ from app.utils.upload_validation import (
     validate_vault_file_content,
     validate_vault_upload,
 )
-from app.utils.vault_security import as_utc_datetime
+from app.utils.vault_security import is_share_expired
 
 logger = logging.getLogger(__name__)
 OUTPUT_DIR = os.path.abspath("vault_files")
@@ -100,7 +101,7 @@ def upload_vault_document(
         ocr_text=encrypted_ocr_text,
     )
 
-    # Roll back the DB transaction and remove the encrypted blob if persistence fails.
+    # Roll back DB work and remove the blob if persistence fails.
     try:
         with open(encrypted_path, "xb") as encrypted_file:
             encrypted_file.write(encrypted_bytes)
@@ -152,6 +153,12 @@ def _read_decrypted_document(doc: VaultDocument) -> bytes:
     try:
         with open(encrypted_path, "rb") as encrypted_file:
             return decrypt_file(encrypted_file.read())
+    except InvalidToken as exc:
+        logger.exception("Vault file could not be authenticated/decrypted.")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="The encrypted document could not be decrypted.",
+        ) from exc
     except OSError as exc:
         logger.exception("Unable to read encrypted vault file.")
         raise HTTPException(
@@ -226,14 +233,29 @@ def download_via_share_token(db: Session, token: str) -> tuple:
             detail="Share link has no valid expiry and cannot be used.",
         )
 
-    expires_at = as_utc_datetime(doc.share_expires_at)
-    if datetime.now(timezone.utc) >= expires_at:
+    if is_share_expired(doc.share_expires_at):
         raise HTTPException(
             status_code=status.HTTP_410_GONE,
             detail="Share link has expired.",
         )
 
     return _read_decrypted_document(doc), doc.file_name
+
+
+def revoke_share_link(db: Session, doc_id: str, student_id: str) -> None:
+    """Revoke an existing share token for a document owned by the student."""
+    doc = db.query(VaultDocument).filter(
+        VaultDocument.id == doc_id,
+        VaultDocument.student_id == student_id,
+    ).first()
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found.",
+        )
+    doc.share_token = None
+    doc.share_expires_at = None
+    db.commit()
 
 
 def delete_vault_document(

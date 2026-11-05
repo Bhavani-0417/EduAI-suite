@@ -55,6 +55,21 @@ export default function Vault() {
     } catch (err) { alert(err.response?.data?.detail || 'Error generating link'); }
   };
 
+  const revokeShare = async (id) => {
+    if (!confirm('Revoke this share link? Anyone using it will lose access.')) return;
+    try {
+      await vaultAPI.revokeShareDocument(id);
+      setLinks(prev => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      load();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Could not revoke this share link.');
+    }
+  };
+
   const deleteDoc = async (id) => {
     if (!confirm('Delete this document permanently?')) return;
     try {
@@ -110,7 +125,7 @@ export default function Vault() {
                   onClick={() => fileRef.current.click()}>
                   <div style={{ fontSize: 28, marginBottom: 6 }}>🔒</div>
                   <div style={{ color: '#4a5568', fontSize: 12 }}>{file ? file.name : 'Click to select file'}</div>
-                  <div style={{ color: '#374151', fontSize: 11, marginTop: 4 }}>Encrypted with AES-256</div>
+                  <div style={{ color: '#374151', fontSize: 11, marginTop: 4 }}>Encrypted with Fernet</div>
                 </div>
                 <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.bmp" style={{ display: 'none' }} onChange={e => setFile(e.target.files[0])} />
               </div>
@@ -131,7 +146,7 @@ export default function Vault() {
 
           <div style={{ ...card, marginTop: 14, background: '#0c1a1a', border: '1px solid #065f46' }}>
             <div style={{ fontSize: 13, color: '#6ee7b7', fontWeight: 500, marginBottom: 6 }}>🔒 Security Features</div>
-            {['Fernet encryption at rest', 'Time-limited token links', 'OCR text extraction', 'Owner-scoped document access'].map(f => (
+            {['Fernet file encryption', 'Encrypted OCR text at rest', 'Expiring and revocable share links', 'Owner-scoped document access'].map(f => (
               <div key={f} style={{ fontSize: 12, color: '#34d399', marginBottom: 3 }}>✓ {f}</div>
             ))}
           </div>
@@ -167,6 +182,11 @@ export default function Vault() {
                         <button onClick={() => share(doc.id)} style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid #1e4620', background: '#0c1a0e', color: '#10b981', fontSize: 12, cursor: 'pointer' }}>
                           🔗 Share
                         </button>
+                        {(doc.has_share_link || shareLinks[doc.id]) && (
+                          <button onClick={() => revokeShare(doc.id)} style={{ padding: '5px 9px', borderRadius: 6, border: '1px solid #7c2d12', background: '#1c120c', color: '#fb923c', fontSize: 12, cursor: 'pointer' }}>
+                            Revoke
+                          </button>
+                        )}
                         <button onClick={() => deleteDoc(doc.id)} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #7f1d1d', background: '#1a0c0c', color: '#ef4444', fontSize: 12, cursor: 'pointer' }}>
                           ×
                         </button>

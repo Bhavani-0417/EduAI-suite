@@ -33,7 +33,7 @@ def test_download_filename_is_safe_for_response_headers():
     header = content_disposition_attachment('report"\r\nX-Evil: yes.pdf')
     assert "\r" not in header
     assert "\n" not in header
-    assert "X-Evil" not in header
+    assert "report%22X-Evil%3A%20yes.pdf" in header
     assert 'filename="download"' in header
     assert "filename*=UTF-8''" in header
 

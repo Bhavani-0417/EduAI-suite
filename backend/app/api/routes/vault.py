@@ -13,6 +13,7 @@ from app.services.vault.vault_service import (
     download_vault_document,
     download_via_share_token,
     generate_share_link,
+    revoke_share_link,
     get_vault_documents,
     upload_vault_document,
 )
@@ -95,6 +96,17 @@ def create_share_link(
 ):
     """Create a public bearer link that expires between 1 and 168 hours."""
     return generate_share_link(db, doc_id, current_user.id, expire_hours)
+
+
+@router.delete("/share/{doc_id}")
+def revoke_document_share(
+    doc_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Revoke any active public share token for an owned document."""
+    revoke_share_link(db, doc_id, current_user.id)
+    return {"message": "Share link revoked."}
 
 
 @router.delete("/{doc_id}")
