@@ -108,3 +108,23 @@ def test_parse_legacy_direct_cloudinary_upload_urls(url, expected):
 def test_legacy_cloudinary_parser_rejects_non_direct_urls(url):
     from app.utils.note_cloudinary import parse_legacy_cloudinary_upload_url
     assert parse_legacy_cloudinary_upload_url(url) is None
+
+
+
+def test_destroy_authenticated_asset_uses_authenticated_delivery():
+    from app.utils.note_cloudinary import destroy_authenticated_asset
+
+    captured = {}
+
+    def fake_destroy(public_id, **options):
+        captured.update(public_id=public_id, **options)
+        return {"result": "ok"}
+
+    stored = encode_authenticated_asset(sample_upload())
+    assert destroy_authenticated_asset(stored, destroy_asset=fake_destroy) is True
+    assert captured == {
+        "public_id": sample_upload()["public_id"],
+        "resource_type": "image",
+        "type": "authenticated",
+        "invalidate": True,
+    }

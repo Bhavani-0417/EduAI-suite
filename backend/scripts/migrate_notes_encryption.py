@@ -172,8 +172,13 @@ def main() -> None:
         for listed_collection in client.list_collections():
             collection_name = listed_collection.name if hasattr(listed_collection, "name") else str(listed_collection)
             student_id = collection_owners.get(collection_name)
+            if not student_id and collection_name.startswith("student_"):
+                # Encrypt orphaned collections too; without an owner row their
+                # chunks are deliberately marked unlinked and excluded from RAG.
+                student_id = collection_name.removeprefix("student_").replace("_", "-")
+                owner_filename_map.setdefault(student_id, {})
             if not student_id:
-                logger.warning("Skipping Chroma collection with no matching student: %s", collection_name)
+                logger.warning("Skipping non-student Chroma collection: %s", collection_name)
                 continue
             collection = client.get_collection(name=collection_name)
             chunks, unmapped = migrate_chroma_collection(

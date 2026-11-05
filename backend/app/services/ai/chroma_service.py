@@ -84,6 +84,6 @@ def search_collection(
 def delete_from_collection(student_id: str, note_id: str):
     """Delete the encrypted text and vectors associated with one note ID."""
     collection = get_or_create_collection(student_id)
-    results = collection.get(where={"note_id": note_id}, include=[])
+    results = collection.get(where={"note_id": note_id})
     if results.get("ids"):
         collection.delete(ids=results["ids"])
