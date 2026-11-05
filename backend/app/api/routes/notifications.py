@@ -4,40 +4,25 @@ from typing import Optional
 from datetime import datetime
 
 from app.db.database import get_db
-from app.services.notifications_service import (
-    get_events, create_event, seed_events
-)
-from app.api.middlewares.auth_middleware import get_current_user
+from app.services.notifications_service import get_events, create_event, seed_events
+from app.api.middlewares.auth_middleware import get_current_user, require_admin
 from app.models.user import User
 from app.models.events import EventType
 
-router = APIRouter(
-    prefix="/api/notifications",
-    tags=["Notifications"]
-)
+router = APIRouter(prefix="/api/notifications", tags=["Notifications"])
 
 
 @router.get("/events")
 def list_events(
     city: Optional[str] = Query(None, description="Filter by city"),
     event_type: Optional[str] = Query(None, description="hackathon/workshop/college_event/exam"),
-    limit: int = Query(20, le=50),
+    limit: int = Query(20, ge=1, le=50),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    """
-    Get upcoming events for the student.
-
-    GET /api/notifications/events?city=Hyderabad&event_type=hackathon
-
-    Auto-filters by student's city if no city provided.
-    Returns nearest upcoming events first.
-    """
-    # Use student's city if not specified
+    """Get upcoming events, defaulting to the authenticated user's city."""
     filter_city = city or current_user.city
-
     events = get_events(db, filter_city, event_type, limit=limit)
-
     return {
         "total": len(events),
         "city_filter": filter_city,
@@ -46,24 +31,24 @@ def list_events(
                 "id": event.id,
                 "title": event.title,
                 "description": event.description,
-                "event_type": event.event_type.value if hasattr(event.event_type, 'value') else event.event_type,
+                "event_type": event.event_type.value if hasattr(event.event_type, "value") else event.event_type,
                 "event_date": str(event.event_date),
                 "location": event.location,
                 "city": event.city,
                 "registration_url": event.registration_url,
-                "tags": event.tags
+                "tags": event.tags,
             }
             for event in events
-        ]
+        ],
     }
 
 
 @router.post("/events/seed")
-def seed(db: Session = Depends(get_db)):
-    """
-    Seed sample events for testing.
-    Run once to populate events table.
-    """
+def seed(
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(require_admin),
+):
+    """Seed sample events. Restricted to administrators."""
     seed_events(db)
     return {"message": "Sample events seeded!"}
 
@@ -78,33 +63,38 @@ def add_event(
     location: Optional[str] = None,
     registration_url: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    admin_user: User = Depends(require_admin),
 ):
-    """
-    Create a new event (for college admins or testing).
-    """
+    """Create an event. Restricted to administrators."""
     event_type_map = {
         "hackathon": EventType.HACKATHON,
         "workshop": EventType.WORKSHOP,
         "college_event": EventType.COLLEGE_EVENT,
         "exam": EventType.EXAM,
-        "deadline": EventType.DEADLINE
+        "deadline": EventType.DEADLINE,
     }
+    try:
+        parsed_event_date = datetime.fromisoformat(event_date)
+    except ValueError as exc:
+        from fastapi import HTTPException, status
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="event_date must be a valid ISO 8601 datetime.",
+        ) from exc
 
     event = create_event(db, {
         "title": title,
         "description": description,
         "event_type": event_type_map.get(event_type, EventType.COLLEGE_EVENT),
-        "event_date": datetime.fromisoformat(event_date),
+        "event_date": parsed_event_date,
         "city": city,
         "location": location,
         "registration_url": registration_url,
-        "is_external": True
+        "is_external": True,
     })
-
     return {
         "message": "Event created!",
         "id": event.id,
         "title": event.title,
-        "event_date": str(event.event_date)
+        "event_date": str(event.event_date),
     }
