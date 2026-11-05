@@ -11,6 +11,12 @@ def as_utc_datetime(value: datetime) -> datetime:
     return value.astimezone(timezone.utc)
 
 
+def is_share_expired(expires_at: datetime, now: datetime | None = None) -> bool:
+    """Compare aware or legacy-naive database expiry values safely in UTC."""
+    current_time = as_utc_datetime(now or datetime.now(timezone.utc))
+    return current_time >= as_utc_datetime(expires_at)
+
+
 def content_disposition_attachment(file_name: str | None) -> str:
     """
     Build a safe RFC 6266 Content-Disposition value.

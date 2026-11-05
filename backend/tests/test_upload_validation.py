@@ -28,7 +28,7 @@ def test_rejects_missing_or_unsupported_names(file_name):
         validate_vault_upload(file_name, 1024)
 
 
-@pytest.mark.parametrize("file_name", ["../transcript.pdf", r"C:\\Users\\student\\id.png"])
+@pytest.mark.parametrize("file_name", ["../transcript.pdf", r"C:\Users\student\id.png"])
 def test_rejects_path_components(file_name):
     with pytest.raises(ValueError, match="directory path"):
         validate_vault_upload(file_name, 1024)
@@ -48,10 +48,10 @@ def test_rejects_uploads_larger_than_ten_megabytes():
 @pytest.mark.parametrize(
     ("extension", "file_bytes"),
     [
-        ("pdf", b"%PDF-1.7\\nbody"),
-        ("png", b"\\x89PNG\\r\\n\\x1a\\nbody"),
-        ("jpg", b"\\xff\\xd8\\xffbody"),
-        ("jpeg", b"\\xff\\xd8\\xffbody"),
+        ("pdf", b"%PDF-1.7\nbody"),
+        ("png", b"\x89PNG\r\n\x1a\nbody"),
+        ("jpg", b"\xff\xd8\xffbody"),
+        ("jpeg", b"\xff\xd8\xffbody"),
         ("bmp", b"BMbody"),
     ],
 )

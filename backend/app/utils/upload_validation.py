@@ -35,9 +35,9 @@ def validate_vault_file_content(extension: str, file_bytes: bytes) -> None:
 
     normalized = extension.lower().lstrip(".")
     signatures = {
-        "png": file_bytes.startswith(b"\\x89PNG\\r\\n\\x1a\\n"),
-        "jpg": file_bytes.startswith(b"\\xff\\xd8\\xff"),
-        "jpeg": file_bytes.startswith(b"\\xff\\xd8\\xff"),
+        "png": file_bytes.startswith(b"\x89PNG\r\n\x1a\n"),
+        "jpg": file_bytes.startswith(b"\xff\xd8\xff"),
+        "jpeg": file_bytes.startswith(b"\xff\xd8\xff"),
         "bmp": file_bytes.startswith(b"BM"),
         "pdf": b"%PDF-" in file_bytes[:1024],
     }
