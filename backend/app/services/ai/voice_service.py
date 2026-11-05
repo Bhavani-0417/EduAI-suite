@@ -28,15 +28,16 @@ def speech_to_text(audio_bytes: bytes, audio_format: str = "wav") -> str:
         with open(temp_path, "wb") as f:
             f.write(audio_bytes)
 
-        # Transcribe
-        segments, info = model.transcribe(temp_path, beam_size=5)
-        transcript = " ".join([seg.text for seg in segments]).strip()
-
-        # Clean up temp file
-        os.remove(temp_path)
-
-        print(f"🎤 Transcribed: {transcript[:80]}")
-        return transcript
+        try:
+            segments, info = model.transcribe(temp_path, beam_size=5)
+            transcript = " ".join([seg.text for seg in segments]).strip()
+            print(f"🎤 Transcribed: {transcript[:80]}")
+            return transcript
+        finally:
+            try:
+                os.remove(temp_path)
+            except FileNotFoundError:
+                pass
 
     except Exception as e:
         print(f"STT error: {e}")

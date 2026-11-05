@@ -1,4 +1,5 @@
 import os
+from app.utils.file_storage import safe_filename_fragment
 import uuid
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -41,7 +42,7 @@ def build_resume_pdf(resume_data: dict) -> dict:
     """
 
     file_id = str(uuid.uuid4())
-    name_slug = resume_data["full_name"].replace(" ", "_")
+    name_slug = safe_filename_fragment(resume_data["full_name"], 60)
     file_name = f"{file_id}_{name_slug}_Resume.pdf"
     file_path = os.path.join(OUTPUT_DIR, file_name)
 

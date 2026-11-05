@@ -1,4 +1,5 @@
 import os
+from app.utils.file_storage import safe_filename_fragment
 import uuid
 from pptx import Presentation
 from pptx.util import Inches, Pt
@@ -380,7 +381,7 @@ def generate_college_ppt(
 
     # Step 5 — Save file
     file_id = str(uuid.uuid4())
-    file_name = f"{file_id}_{topic[:25].replace(' ', '_')}_CollegeTemplate.pptx"
+    file_name = f"{file_id}_{safe_filename_fragment(topic, 25)}_CollegeTemplate.pptx"
     file_path = os.path.join(OUTPUT_DIR, file_name)
     prs.save(file_path)
 
