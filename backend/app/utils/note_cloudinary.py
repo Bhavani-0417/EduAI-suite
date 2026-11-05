@@ -142,7 +142,7 @@ def parse_legacy_cloudinary_upload_url(url: str) -> dict[str, str] | None:
         if resource_type not in {"image", "raw", "video"}:
             return None
         asset_parts = parts[3:]
-        if asset_parts and re.fullmatch(r"v\\d+", asset_parts[0]):
+        if asset_parts and re.fullmatch(r"v\d+", asset_parts[0]):
             asset_parts = asset_parts[1:]
         if not asset_parts or any(part.startswith(("c_", "t_", "q_", "f_")) for part in asset_parts[:-1]):
             return None
