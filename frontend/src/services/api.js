@@ -107,7 +107,10 @@ export const vaultAPI = {
   uploadDocument: (file, docType) => {
     const fd = new FormData();
     fd.append('file', file);
-    return api.post('/api/vault/upload', fd, { params: { doc_type: docType } });
+    return api.post('/api/vault/upload', fd, {
+      params: { doc_type: docType },
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
   },
   shareDocument: (id, hours) => api.post(`/api/vault/share/${id}`, null, {
     params: { expire_hours: hours },
