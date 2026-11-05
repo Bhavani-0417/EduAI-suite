@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException, UploadFile, status
 
 from app.models.notes import Note, NoteSource
+from app.services.vault.encryption_service import encrypt_notes_text, decrypt_notes_text
 from app.utils.note_upload_validation import (
     MAX_NOTE_UPLOAD_BYTES,
     validate_note_file_content,
@@ -185,8 +186,10 @@ def upload_note(
             detail=str(exc),
         ) from exc
 
-    # Step 3 — Upload to Cloudinary
-    print(f"📤 Uploading {file_name} to Cloudinary...")
+    note_id = str(uuid.uuid4())
+
+    # Step 3 — Upload to private Cloudinary storage.
+    print(f"📤 Uploading {file_name} to private Cloudinary storage...")
     file_url = upload_to_cloudinary(file_bytes, file_name, student_id)
     
     # Step 4 — Extract text
@@ -216,28 +219,23 @@ def upload_note(
         if chunks:
             add_to_collection(
                 student_id=student_id,
-                note_id=str(uuid.uuid4()),
+                note_id=note_id,
                 chunks=chunks,
-                metadata={
-                    "subject": classification.get("subject") or "Unknown",
-                    "topic": classification.get("topic") or "Unknown",
-                    "file_name": file_name,
-                    "source": source
-                }
+                metadata={}
             )
     
     # Step 8 — Save to PostgreSQL
     note = Note(
-        id=str(uuid.uuid4()),
+        id=note_id,
         student_id=student_id,
-        subject=classification.get("subject"),
-        topic=classification.get("topic"),
-        chapter=classification.get("chapter"),
+        subject=encrypt_notes_text(classification.get("subject")),
+        topic=encrypt_notes_text(classification.get("topic")),
+        chapter=encrypt_notes_text(classification.get("chapter")),
         file_url=file_url,
-        file_name=file_name,
+        file_name=encrypt_notes_text(file_name),
         file_type=extension,
-        extracted_text=extracted_text[:5000] if extracted_text else None,
-        summary=summary,
+        extracted_text=encrypt_notes_text(extracted_text[:5000] if extracted_text else None),
+        summary=encrypt_notes_text(summary),
         source=NoteSource.STUDENT if source == "student" else NoteSource.FACULTY
     )
     
@@ -252,56 +250,83 @@ def upload_note(
 def get_notes(
     db: Session,
     student_id: str,
-    subject: str = None
+    subject: str = None,
 ) -> list:
-    """Get all notes for a student, optionally filtered by subject"""
-    query = db.query(Note).filter(Note.student_id == student_id)
-    
-    if subject:
-        query = query.filter(Note.subject.ilike(f"%{subject}%"))
-    
-    return query.order_by(Note.created_at.desc()).all()
+    """Load only the caller's notes, then decrypt/filter fields in process memory."""
+    notes = (
+        db.query(Note)
+        .filter(Note.student_id == student_id)
+        .order_by(Note.created_at.desc())
+        .all()
+    )
+    visible_notes = []
+    normalized_filter = subject.strip().casefold() if subject else None
+    for note in notes:
+        note.file_name = decrypt_notes_text(note.file_name)
+        note.subject = decrypt_notes_text(note.subject)
+        note.topic = decrypt_notes_text(note.topic)
+        note.chapter = decrypt_notes_text(note.chapter)
+        note.extracted_text = decrypt_notes_text(note.extracted_text)
+        note.summary = decrypt_notes_text(note.summary)
+        if normalized_filter and normalized_filter not in (note.subject or "").casefold():
+            continue
+        visible_notes.append(note)
+    return visible_notes
 
 
 def ask_question(
     db: Session,
     student_id: str,
     question: str,
-    subject_filter: str = None
+    subject_filter: str = None,
 ) -> dict:
-    """
-    RAG Pipeline — Answer a question from student's notes.
-    
-    Retrieval → Augmentation → Generation
-    """
-    # RETRIEVAL — search ChromaDB for relevant chunks
-    print(f"🔍 Searching notes for: {question}")
+    """Retrieve encrypted-at-rest note chunks and answer from owner-scoped context."""
     results = search_collection(
         student_id=student_id,
         query=question,
-        n_results=5,
-        subject_filter=subject_filter
+        n_results=50 if subject_filter else 5,
     )
-    
-    # Extract relevant chunks and source info
+
+    documents = (results.get("documents") or [[]])[0] or []
+    metadatas = (results.get("metadatas") or [[]])[0] or []
+    note_ids = {
+        meta.get("note_id")
+        for meta in metadatas
+        if isinstance(meta, dict) and meta.get("note_id")
+    }
+    if not note_ids:
+        answer = answer_question_with_context(question, [])
+        return {"question": question, "answer": answer, "sources": []}
+
+    owned_notes = db.query(Note).filter(
+        Note.student_id == student_id,
+        Note.id.in_(note_ids),
+    ).all()
+    note_map = {}
+    for note in owned_notes:
+        note_map[note.id] = {
+            "subject": decrypt_notes_text(note.subject) or "Unknown",
+            "file_name": decrypt_notes_text(note.file_name) or "Unknown",
+        }
+
+    normalized_filter = subject_filter.strip().casefold() if subject_filter else None
     context_chunks = []
     sources = []
-    
-    if results["documents"] and results["documents"][0]:
-        context_chunks = results["documents"][0]
-        
-        if results["metadatas"] and results["metadatas"][0]:
-            for meta in results["metadatas"][0]:
-                source = f"{meta.get('subject', 'Unknown')} - {meta.get('file_name', 'Unknown')}"
-                if source not in sources:
-                    sources.append(source)
-    
-    # GENERATION — ask Gemini to answer using retrieved context
-    print(f"🤖 Generating answer with {len(context_chunks)} context chunks...")
+    seen = set()
+    for chunk, meta in zip(documents, metadatas):
+        note_id = meta.get("note_id") if isinstance(meta, dict) else None
+        note_info = note_map.get(note_id)
+        if not note_info:
+            continue
+        if normalized_filter and normalized_filter not in note_info["subject"].casefold():
+            continue
+        context_chunks.append(chunk)
+        source = f"{note_info['subject']} - {note_info['file_name']}"
+        if source not in seen:
+            sources.append(source)
+            seen.add(source)
+        if len(context_chunks) >= 5:
+            break
+
     answer = answer_question_with_context(question, context_chunks)
-    
-    return {
-        "question": question,
-        "answer": answer,
-        "sources": sources
-    }
+    return {"question": question, "answer": answer, "sources": sources}
