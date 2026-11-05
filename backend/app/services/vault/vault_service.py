@@ -1,71 +1,71 @@
 import logging
 import os
-import uuid
 import secrets
-from datetime import datetime, timedelta
-from sqlalchemy.orm import Session
-from fastapi import HTTPException, UploadFile, status
+import uuid
+from datetime import datetime, timedelta, timezone
 
-from app.models.vault import VaultDocument, DocumentType
-from app.services.vault.encryption_service import encrypt_file, decrypt_file
+from fastapi import HTTPException, UploadFile, status
+from sqlalchemy.orm import Session
+
+from app.models.vault import DocumentType, VaultDocument
 from app.services.notes.notes_service import extract_text
-from app.utils.upload_validation import MAX_VAULT_UPLOAD_BYTES, validate_vault_upload
+from app.services.vault.encryption_service import (
+    encrypt_file,
+    encrypt_ocr_text,
+    decrypt_file,
+)
+from app.utils.upload_validation import (
+    MAX_VAULT_UPLOAD_BYTES,
+    validate_vault_file_content,
+    validate_vault_upload,
+)
+from app.utils.vault_security import as_utc_datetime
 
 logger = logging.getLogger(__name__)
-OUTPUT_DIR = "vault_files"
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+OUTPUT_DIR = os.path.abspath("vault_files")
+
+
+def _resolve_vault_path(stored_path: str) -> str:
+    """Resolve a DB path and reject paths or symlinks outside the vault root."""
+    vault_root = os.path.realpath(OUTPUT_DIR)
+    resolved_path = os.path.realpath(stored_path)
+    try:
+        is_inside_vault = os.path.commonpath([vault_root, resolved_path]) == vault_root
+    except ValueError:
+        is_inside_vault = False
+    if not is_inside_vault:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Stored document path is outside the vault directory.",
+        )
+    return resolved_path
 
 
 def upload_vault_document(
     db: Session,
     student_id: str,
     file: UploadFile,
-    doc_type: str
+    doc_type: str,
 ) -> VaultDocument:
-    """
-    Upload and encrypt a document to the vault.
-
-    Steps:
-    1. Read file bytes
-    2. Extract text with OCR (for searchability)
-    3. Encrypt the entire file with Fernet authenticated encryption
-    4. Save encrypted file to disk
-    5. Save metadata to PostgreSQL
-    """
-
+    """Validate, OCR, encrypt and persist a private vault document."""
     file_name = file.filename or ""
     file_bytes = file.file.read(MAX_VAULT_UPLOAD_BYTES + 1)
 
     if len(file_bytes) > MAX_VAULT_UPLOAD_BYTES:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="Vault files must be 10 MB or smaller."
+            detail="Vault files must be 10 MB or smaller.",
         )
 
     try:
         extension = validate_vault_upload(file_name, len(file_bytes))
+        validate_vault_file_content(extension, file_bytes)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc)
+            detail=str(exc),
         ) from exc
 
-    # Step 1 — Extract text for OCR search
-    print(f"📝 Extracting text from {file_name}...")
-    ocr_text = extract_text(file_bytes, extension)
-
-    # Step 2 — Encrypt file
-    print(f"🔐 Encrypting {file_name}...")
-    encrypted_bytes = encrypt_file(file_bytes)
-
-    # Step 3 — Save encrypted file locally
-    encrypted_file_name = f"{student_id}_{uuid.uuid4()}.enc"
-    encrypted_path = os.path.join(OUTPUT_DIR, encrypted_file_name)
-
-    with open(encrypted_path, "wb") as f:
-        f.write(encrypted_bytes)
-
-    # Step 4 — Map doc_type string to enum
     doc_type_map = {
         "marksheet": DocumentType.MARKSHEET,
         "certificate": DocumentType.CERTIFICATE,
@@ -74,180 +74,185 @@ def upload_vault_document(
         "offer_letter": DocumentType.OFFER_LETTER,
         "other": DocumentType.OTHER,
     }
+    normalized_doc_type = (doc_type or "").strip().lower()
+    if normalized_doc_type not in doc_type_map:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported document type.",
+        )
+    doc_type_enum = doc_type_map[normalized_doc_type]
 
-    doc_type_enum = doc_type_map.get(doc_type.lower(), DocumentType.OTHER)
+    # Parser errors are handled by extract_text; original bytes remain encrypted.
+    ocr_text = extract_text(file_bytes, extension)
+    encrypted_bytes = encrypt_file(file_bytes)
+    encrypted_ocr_text = encrypt_ocr_text(ocr_text[:3000] if ocr_text else None)
 
-    # Step 5 — Save metadata to DB
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    encrypted_file_name = f"{student_id}_{uuid.uuid4()}.enc"
+    encrypted_path = os.path.join(OUTPUT_DIR, encrypted_file_name)
+
     vault_doc = VaultDocument(
         id=str(uuid.uuid4()),
         student_id=student_id,
         doc_type=doc_type_enum,
         file_name=file_name,
         encrypted_url=encrypted_path,
-        ocr_text=ocr_text[:3000] if ocr_text else None
+        ocr_text=encrypted_ocr_text,
     )
 
-    db.add(vault_doc)
-    db.commit()
-    db.refresh(vault_doc)
+    # Roll back the DB transaction and remove the encrypted blob if persistence fails.
+    try:
+        with open(encrypted_path, "xb") as encrypted_file:
+            encrypted_file.write(encrypted_bytes)
+        db.add(vault_doc)
+        db.commit()
+    except Exception:
+        db.rollback()
+        try:
+            os.remove(encrypted_path)
+        except FileNotFoundError:
+            pass
+        except OSError:
+            logger.exception("Failed to clean up encrypted vault upload after DB failure.")
+        raise
 
-    print(f"✅ Vault document saved: {vault_doc.id}")
+    db.refresh(vault_doc)
+    logger.info("Vault document stored: %s", vault_doc.id)
     return vault_doc
 
 
 def get_vault_documents(
     db: Session,
     student_id: str,
-    doc_type: str = None
+    doc_type: str | None = None,
 ) -> list:
-    """Get all vault documents for a student"""
-    query = db.query(VaultDocument).filter(
-        VaultDocument.student_id == student_id
-    )
+    """Get all vault documents for a student, optionally filtered by type."""
+    query = db.query(VaultDocument).filter(VaultDocument.student_id == student_id)
 
     if doc_type:
-        query = query.filter(
-            VaultDocument.doc_type == doc_type
-        )
+        try:
+            normalized_type = DocumentType(doc_type.strip().lower())
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported document type.",
+            ) from exc
+        query = query.filter(VaultDocument.doc_type == normalized_type)
 
     return query.order_by(VaultDocument.created_at.desc()).all()
+
+
+def _read_decrypted_document(doc: VaultDocument) -> bytes:
+    encrypted_path = _resolve_vault_path(doc.encrypted_url)
+    if not os.path.isfile(encrypted_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Encrypted file missing. Please re-upload.",
+        )
+    try:
+        with open(encrypted_path, "rb") as encrypted_file:
+            return decrypt_file(encrypted_file.read())
+    except OSError as exc:
+        logger.exception("Unable to read encrypted vault file.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Encrypted file is unavailable.",
+        ) from exc
 
 
 def download_vault_document(
     db: Session,
     doc_id: str,
-    student_id: str
+    student_id: str,
 ) -> tuple:
-    """
-    Decrypt and return a vault document.
-    Returns (file_bytes, file_name).
-    """
+    """Decrypt and return a document belonging to the authenticated owner."""
     doc = db.query(VaultDocument).filter(
         VaultDocument.id == doc_id,
-        VaultDocument.student_id == student_id
+        VaultDocument.student_id == student_id,
     ).first()
-
     if not doc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found in vault."
+            detail="Document not found in vault.",
         )
-
-    if not os.path.exists(doc.encrypted_url):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Encrypted file missing. Please re-upload."
-        )
-
-    # Read and decrypt
-    with open(doc.encrypted_url, "rb") as f:
-        encrypted_bytes = f.read()
-
-    decrypted_bytes = decrypt_file(encrypted_bytes)
-    return decrypted_bytes, doc.file_name
+    return _read_decrypted_document(doc), doc.file_name
 
 
 def generate_share_link(
     db: Session,
     doc_id: str,
     student_id: str,
-    expire_hours: int = 24
+    expire_hours: int = 24,
 ) -> dict:
-    """
-    Generate a time-limited share token for a document.
-
-    Token is a random string stored in DB.
-    Anyone with the token can download within expire_hours.
-    After that, token is invalid.
-    """
+    """Generate a random bearer token with an explicit UTC expiry."""
     doc = db.query(VaultDocument).filter(
         VaultDocument.id == doc_id,
-        VaultDocument.student_id == student_id
+        VaultDocument.student_id == student_id,
     ).first()
-
     if not doc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found."
+            detail="Document not found.",
         )
 
-    # Generate secure random token
     token = secrets.token_urlsafe(32)
-    expires_at = datetime.utcnow() + timedelta(hours=expire_hours)
-
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=expire_hours)
     doc.share_token = token
     doc.share_expires_at = expires_at
-
     db.commit()
 
     return {
         "share_token": token,
         "share_url": f"/api/vault/share/{token}",
-        "expires_at": str(expires_at),
-        "expires_in_hours": expire_hours
+        "expires_at": expires_at.isoformat(),
+        "expires_in_hours": expire_hours,
     }
 
 
-def download_via_share_token(
-    db: Session,
-    token: str
-) -> tuple:
-    """
-    Download a document using share token.
-    Validates token and expiry before decrypting.
-    """
+def download_via_share_token(db: Session, token: str) -> tuple:
+    """Validate bearer token and expiry before returning decrypted bytes."""
     doc = db.query(VaultDocument).filter(
-        VaultDocument.share_token == token
+        VaultDocument.share_token == token,
     ).first()
-
     if not doc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Invalid share link."
+            detail="Invalid share link.",
         )
 
-    if doc.share_expires_at and datetime.utcnow() > doc.share_expires_at:
+    if not doc.share_expires_at:
         raise HTTPException(
             status_code=status.HTTP_410_GONE,
-            detail="Share link has expired."
+            detail="Share link has no valid expiry and cannot be used.",
         )
 
-    with open(doc.encrypted_url, "rb") as f:
-        encrypted_bytes = f.read()
+    expires_at = as_utc_datetime(doc.share_expires_at)
+    if datetime.now(timezone.utc) >= expires_at:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Share link has expired.",
+        )
 
-    decrypted_bytes = decrypt_file(encrypted_bytes)
-    return decrypted_bytes, doc.file_name
+    return _read_decrypted_document(doc), doc.file_name
+
 
 def delete_vault_document(
     db: Session,
     doc_id: str,
-    student_id: str
+    student_id: str,
 ) -> None:
-    """Delete a document owned by the student and its encrypted file."""
+    """Delete an owned document and its encrypted file."""
     doc = db.query(VaultDocument).filter(
         VaultDocument.id == doc_id,
-        VaultDocument.student_id == student_id
+        VaultDocument.student_id == student_id,
     ).first()
-
     if not doc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found in vault."
+            detail="Document not found in vault.",
         )
 
-    vault_root = os.path.realpath(OUTPUT_DIR)
-    encrypted_path = os.path.realpath(doc.encrypted_url)
-    try:
-        is_inside_vault = os.path.commonpath([vault_root, encrypted_path]) == vault_root
-    except ValueError:
-        is_inside_vault = False
-
-    if not is_inside_vault:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Stored document path is outside the vault directory."
-        )
-
+    encrypted_path = _resolve_vault_path(doc.encrypted_url)
     db.delete(doc)
     db.commit()
 
@@ -256,4 +261,6 @@ def delete_vault_document(
     except FileNotFoundError:
         pass
     except OSError:
-        logger.exception("Vault metadata was deleted, but encrypted file cleanup failed.")
+        logger.exception(
+            "Vault metadata was deleted, but encrypted file cleanup failed."
+        )
