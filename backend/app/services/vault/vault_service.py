@@ -242,6 +242,22 @@ def download_via_share_token(db: Session, token: str) -> tuple:
     return _read_decrypted_document(doc), doc.file_name
 
 
+def revoke_share_link(db: Session, doc_id: str, student_id: str) -> None:
+    """Revoke an existing share token for a document owned by the student."""
+    doc = db.query(VaultDocument).filter(
+        VaultDocument.id == doc_id,
+        VaultDocument.student_id == student_id,
+    ).first()
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found.",
+        )
+    doc.share_token = None
+    doc.share_expires_at = None
+    db.commit()
+
+
 def delete_vault_document(
     db: Session,
     doc_id: str,
