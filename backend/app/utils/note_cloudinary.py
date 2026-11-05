@@ -2,8 +2,11 @@
 
 import json
 import time
+import logging
 from collections.abc import Callable
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 CLOUDINARY_AUTH_REF_PREFIX = "cloudinary-auth:v1:"
 
@@ -90,3 +93,33 @@ def resolve_note_asset_url(
         type="authenticated",
         expires_at=expires_at,
     )
+
+
+
+def destroy_authenticated_asset(
+    stored_value: str,
+    *,
+    destroy_asset: Callable[..., dict] | None = None,
+) -> bool:
+    """Best-effort cleanup for a just-uploaded private asset after DB/Chroma failure."""
+    asset = decode_authenticated_asset(stored_value)
+    if asset is None:
+        return False
+    if destroy_asset is None:
+        import cloudinary
+        import cloudinary.uploader
+        from app.core.config import settings
+
+        cloudinary.config(
+            cloud_name=settings.CLOUDINARY_CLOUD_NAME,
+            api_key=settings.CLOUDINARY_API_KEY,
+            api_secret=settings.CLOUDINARY_API_SECRET,
+        )
+        destroy_asset = cloudinary.uploader.destroy
+    result = destroy_asset(
+        asset["public_id"],
+        resource_type=asset["resource_type"],
+        type="authenticated",
+        invalidate=True,
+    )
+    return result.get("result") in {"ok", "not found"}

@@ -4,6 +4,7 @@ import io
 import logging
 from typing import Optional
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import set_committed_value
 from fastapi import HTTPException, UploadFile, status
 
 from app.models.notes import Note, NoteSource
@@ -14,7 +15,7 @@ from app.utils.note_upload_validation import (
     validate_note_upload,
 )
 from app.utils.file_storage import safe_filename_fragment
-from app.utils.note_cloudinary import encode_authenticated_asset
+from app.utils.note_cloudinary import encode_authenticated_asset, destroy_authenticated_asset
 from app.services.ai.chroma_service import (
     add_to_collection, search_collection, delete_from_collection
 )
@@ -187,64 +188,68 @@ def upload_note(
         ) from exc
 
     note_id = str(uuid.uuid4())
+    file_url = None
+    chunks_indexed = False
 
-    # Step 3 — Upload to private Cloudinary storage.
-    print(f"📤 Uploading {file_name} to private Cloudinary storage...")
-    file_url = upload_to_cloudinary(file_bytes, file_name, student_id)
-    
-    # Step 4 — Extract text
-    print(f"📝 Extracting text from {extension} file...")
-    extracted_text = extract_text(file_bytes, extension)
-    
-    if not extracted_text:
-        print("⚠️ No text extracted — file may be image-only or empty")
-        extracted_text = ""
-    
-    # Step 5 — AI classifies subject and topic
-    classification = {"subject": None, "topic": None, "chapter": None}
-    summary = None
-    
-    if extracted_text:
-        print("🤖 Classifying subject and topic with AI...")
-        classification = classify_note(extracted_text)
-        
-        # Step 6 — Generate summary
-        print("📋 Generating summary with AI...")
-        summary = summarize_note(extracted_text)
-        
-        # Step 7 — Chunk and store in ChromaDB
-        print("🧠 Storing in vector database...")
-        chunks = chunk_text(extracted_text)
-        
-        if chunks:
-            add_to_collection(
-                student_id=student_id,
-                note_id=note_id,
-                chunks=chunks,
-                metadata={}
-            )
-    
-    # Step 8 — Save to PostgreSQL
-    note = Note(
-        id=note_id,
-        student_id=student_id,
-        subject=encrypt_notes_text(classification.get("subject")),
-        topic=encrypt_notes_text(classification.get("topic")),
-        chapter=encrypt_notes_text(classification.get("chapter")),
-        file_url=file_url,
-        file_name=encrypt_notes_text(file_name),
-        file_type=extension,
-        extracted_text=encrypt_notes_text(extracted_text[:5000] if extracted_text else None),
-        summary=encrypt_notes_text(summary),
-        source=NoteSource.STUDENT if source == "student" else NoteSource.FACULTY
-    )
-    
-    db.add(note)
-    db.commit()
-    db.refresh(note)
-    
-    print(f"✅ Note saved: {note.id}")
-    return note
+    try:
+        # Step 3 — Upload to private Cloudinary storage.
+        logger.info("Uploading note file to authenticated Cloudinary delivery.")
+        file_url = upload_to_cloudinary(file_bytes, file_name, student_id)
+
+        # Step 4 — Extract text.
+        extracted_text = extract_text(file_bytes, extension) or ""
+
+        # Step 5 — AI classification and summary.
+        classification = {"subject": None, "topic": None, "chapter": None}
+        summary = None
+        if extracted_text:
+            classification = classify_note(extracted_text)
+            summary = summarize_note(extracted_text)
+
+            # Step 6 — Index plaintext only in process memory; Chroma persists
+            # ciphertext documents plus vectors and a non-sensitive note ID.
+            chunks = chunk_text(extracted_text)
+            if chunks:
+                add_to_collection(
+                    student_id=student_id,
+                    note_id=note_id,
+                    chunks=chunks,
+                    metadata={},
+                )
+                chunks_indexed = True
+
+        # Step 7 — Persist all free-text note fields encrypted.
+        note = Note(
+            id=note_id,
+            student_id=student_id,
+            subject=encrypt_notes_text(classification.get("subject")),
+            topic=encrypt_notes_text(classification.get("topic")),
+            chapter=encrypt_notes_text(classification.get("chapter")),
+            file_url=file_url,
+            file_name=encrypt_notes_text(file_name),
+            file_type=extension,
+            extracted_text=encrypt_notes_text(extracted_text[:5000] if extracted_text else None),
+            summary=encrypt_notes_text(summary),
+            source=NoteSource.STUDENT if source == "student" else NoteSource.FACULTY,
+        )
+        db.add(note)
+        db.commit()
+        db.refresh(note)
+        logger.info("Encrypted note saved: %s", note.id)
+        return note
+    except Exception:
+        db.rollback()
+        if chunks_indexed:
+            try:
+                delete_from_collection(student_id, note_id)
+            except Exception:
+                logger.exception("Could not remove incomplete Chroma note index %s.", note_id)
+        if file_url:
+            try:
+                destroy_authenticated_asset(file_url)
+            except Exception:
+                logger.exception("Could not remove incomplete private Cloudinary asset for note %s.", note_id)
+        raise
 
 
 def get_notes(
@@ -262,12 +267,12 @@ def get_notes(
     visible_notes = []
     normalized_filter = subject.strip().casefold() if subject else None
     for note in notes:
-        note.file_name = decrypt_notes_text(note.file_name)
-        note.subject = decrypt_notes_text(note.subject)
-        note.topic = decrypt_notes_text(note.topic)
-        note.chapter = decrypt_notes_text(note.chapter)
-        note.extracted_text = decrypt_notes_text(note.extracted_text)
-        note.summary = decrypt_notes_text(note.summary)
+        set_committed_value(note, "file_name", decrypt_notes_text(note.file_name))
+        set_committed_value(note, "subject", decrypt_notes_text(note.subject))
+        set_committed_value(note, "topic", decrypt_notes_text(note.topic))
+        set_committed_value(note, "chapter", decrypt_notes_text(note.chapter))
+        set_committed_value(note, "extracted_text", decrypt_notes_text(note.extracted_text))
+        set_committed_value(note, "summary", decrypt_notes_text(note.summary))
         if normalized_filter and normalized_filter not in (note.subject or "").casefold():
             continue
         visible_notes.append(note)
