@@ -13,6 +13,10 @@ def validate_vault_upload(file_name: str | None, file_size: int) -> str:
     if "/" in file_name or "\\" in file_name:
         raise ValueError("The file name must not contain a directory path.")
 
+    if len(file_name) > 255:
+        raise ValueError("File names must be 255 characters or fewer.")
+    if any(ord(char) < 32 or ord(char) == 127 for char in file_name):
+        raise ValueError("File names must not contain control characters.")
     extension = PurePath(file_name).suffix.lower().lstrip(".")
     if extension not in ALLOWED_VAULT_EXTENSIONS:
         raise ValueError("Only PDF, PNG, JPG/JPEG, and BMP files are allowed.")

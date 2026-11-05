@@ -53,6 +53,7 @@ EduAI-suite/
 │   │   ├── schemas/      # Request and response schemas
 │   │   ├── services/     # AI, academic, career, content, and vault logic
 │   │   └── utils/        # Shared helpers
+│   ├── scripts/        # Trusted one-off setup and data migrations
 │   ├── tests/
 │   └── requirements.txt
 ├── frontend/
@@ -156,9 +157,8 @@ GitHub Actions runs lightweight backend unit tests, Python bytecode compilation,
 Run backend checks from `backend/`:
 
 ```bash
-python -m pip install pytest
 python -m pytest tests -q
-python -m compileall -q app
+python -m compileall -q app scripts
 ```
 
 Run the frontend build from `frontend/`:

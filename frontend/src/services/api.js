@@ -115,6 +115,7 @@ export const vaultAPI = {
   shareDocument: (id, hours) => api.post(`/api/vault/share/${id}`, null, {
     params: { expire_hours: hours },
   }),
+  revokeShareDocument: (id) => api.delete(`/api/vault/share/${id}`),
   deleteDocument: (id) => api.delete(`/api/vault/${id}`),
 };
 
