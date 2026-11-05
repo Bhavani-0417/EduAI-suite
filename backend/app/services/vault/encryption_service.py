@@ -67,3 +67,29 @@ def decrypt_ocr_text(stored_text: str | None) -> str | None:
         return stored_text
     token = stored_text[len(OCR_CIPHERTEXT_PREFIX):].encode("ascii")
     return Fernet(get_ocr_encryption_key()).decrypt(token).decode("utf-8")
+
+
+NOTES_CIPHERTEXT_PREFIX = "notes-fernet:v1:"
+
+
+def get_notes_encryption_key() -> bytes:
+    """Use a purpose-specific key for note content, distinct from vault keys."""
+    return _derive_fernet_key(b"eduai_notes_content_salt_v1")
+
+
+def encrypt_notes_text(plain_text: str | None) -> str | None:
+    """Encrypt a note text value before persistence."""
+    if not plain_text:
+        return None
+    encrypted = Fernet(get_notes_encryption_key()).encrypt(plain_text.encode("utf-8"))
+    return NOTES_CIPHERTEXT_PREFIX + encrypted.decode("ascii")
+
+
+def decrypt_notes_text(stored_text: str | None) -> str | None:
+    """Decrypt versioned note text; preserve legacy plaintext during migration."""
+    if stored_text is None:
+        return None
+    if not stored_text.startswith(NOTES_CIPHERTEXT_PREFIX):
+        return stored_text
+    token = stored_text[len(NOTES_CIPHERTEXT_PREFIX):].encode("ascii")
+    return Fernet(get_notes_encryption_key()).decrypt(token).decode("utf-8")

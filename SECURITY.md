@@ -13,7 +13,8 @@ EduAI Suite is an evolving portfolio project. It has not undergone an independen
 - Event creation/seeding, college catalog mutations, and college branding updates require an administrator account.
 - Generated output files still share one application directory and do not yet have per-user ownership metadata. Path checks prevent traversal, but they do not provide strong cross-user artifact isolation; do not store or serve private real-user exports in a public multi-user deployment until per-user artifact ownership is implemented.
 - New learning-note uploads use Cloudinary's `authenticated` delivery type, and authenticated note API responses mint short-lived signed download URLs. Legacy notes that still contain a public Cloudinary URL are no longer re-emitted by the notes API, but the old Cloudinary assets remain public until separately converted to authenticated delivery or deleted.
-- Extracted note text, AI summaries, and ChromaDB embeddings are still stored without application-level encryption; do not treat the notes feature as suitable for real sensitive records yet.
+- New note filename, classification, extracted text, and summary fields are Fernet-encrypted in PostgreSQL. Chroma stores encrypted note document strings and minimizes metadata to a note ID; similarity vectors remain plaintext numeric vectors and can be sensitive derived data. Encrypt Chroma's storage volume and backups and restrict access. Legacy note text/chunks require `python -m scripts.migrate_notes_encryption --apply` after a dry run and backups.
+- Previously uploaded public Cloudinary notes remain public until converted. Inventory with `python -m scripts.migrate_legacy_note_assets`; after backups, convert with `python -m scripts.migrate_legacy_note_assets --apply` and type the confirmation phrase. Invalidation may take a few minutes to propagate, and unsupported delivery URLs require manual review.
 - Voice uploads accept WAV/MP3/M4A/WebM and are limited to 15 MB. Extension and size checks are not a substitute for media decoding in a sandbox or malware scanning.
 - Existing generated documents and encrypted blobs already committed to the repository are not removed by \`.gitignore\`. Review their content and provenance. If sensitive material was committed, removing it from the latest tree is not enough; Git history may also need rewriting and credentials may need rotation.
 
@@ -33,4 +34,4 @@ Fernet uses authenticated symmetric encryption; it should not be described as AE
 
 ## Before production use
 
-Review authentication and authorisation, token/session handling, rate limits, malware scanning, file parser isolation, database migrations, logging, backups, secret management, transport security, and deployment configuration.
+Review authentication and authorisation, token/session handling, rate limits, malware scanning, file parser isolation, encrypted database/vector volumes and backups, migration execution, logging, secret management, transport security, and deployment configuration.

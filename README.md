@@ -174,7 +174,7 @@ These checks do not replace database-backed integration tests, browser tests, or
 
 - Use synthetic/demo accounts and files. Do not upload real identity documents, academic records, or other sensitive personal data to a public demo.
 - The document vault uses Fernet authenticated encryption for files and new OCR text. Legacy plaintext OCR rows require the documented migration; the document-key derivation remains unchanged for existing encrypted files.
-- New learning-note uploads use authenticated Cloudinary delivery with short-lived signed links. Older note assets remain public at Cloudinary until separately converted or deleted; note OCR, summaries, and vector embeddings are not yet encrypted at rest.
+- New learning-note uploads use authenticated Cloudinary delivery with short-lived signed links. New note filenames, classification fields, OCR text, and summaries are Fernet-encrypted in PostgreSQL; Chroma stores encrypted note text and note IDs while retaining similarity vectors. Existing notes require the two documented migrations below. The vectors themselves remain sensitive derived data and rely on encrypted storage volumes/backups.
 - Share tokens are revocable bearer links: anyone who obtains a valid, unexpired link can download that document until its owner revokes it or it expires.
 - Vault uploads are limited to 10 MB and check PDF/image signatures as well as supported extensions. This is not malware scanning or complete parser validation.
 - Downloads use sanitized attachment filenames and no-store cache headers. Back up the database and vault directory before migrating legacy OCR data with `python -m scripts.migrate_vault_ocr` from `backend/`.
@@ -184,6 +184,40 @@ These checks do not replace database-backed integration tests, browser tests, or
 - This is a portfolio/development application, not a certified document-management or production security product.
 
 See [SECURITY.md](SECURITY.md) for data-handling notes and known limitations.
+
+### Notes privacy migrations
+
+Back up PostgreSQL, the Cloudinary asset inventory, and the complete `CHROMA_PERSIST_DIR` before migrating existing notes. Use the same `SECRET_KEY` that the application currently uses; changing it can make encrypted notes and vault OCR unreadable.
+
+From `backend/`, first inspect the note-content migration without writing anything:
+
+```bash
+python -m scripts.migrate_notes_encryption
+```
+
+After checking its counts and confirming backups, apply it:
+
+```bash
+python -m scripts.migrate_notes_encryption --apply
+```
+
+This encrypts the free-text note fields in PostgreSQL and the document strings held by Chroma. It preserves existing Chroma IDs and embeddings rather than re-embedding ciphertext. Legacy chunks are linked to a note only when student ownership and the filename match uniquely; ambiguous chunks are encrypted but reported as unlinked.
+
+Then inventory previously public Cloudinary note URLs:
+
+```bash
+python -m scripts.migrate_legacy_note_assets
+```
+
+After reviewing the inventory and confirming the database backup, run the conversion:
+
+```bash
+python -m scripts.migrate_legacy_note_assets --apply
+```
+
+The command asks you to type `MIGRATE LEGACY NOTE ASSETS`. It converts supported direct Cloudinary upload URLs to authenticated delivery, invalidates CDN caches, and updates the corresponding database locator. Unsupported/transformed URLs are reported for manual review. CDN invalidation can take a few minutes to propagate; previously cached copies may remain accessible temporarily.
+
+Chroma similarity vectors are not ciphertext. Run Chroma and PostgreSQL on encrypted volumes, encrypt backups, restrict filesystem and database access, and keep `SECRET_KEY` out of source control. Do not use real student data on an untrusted host.
 
 ## Current limitations
 
