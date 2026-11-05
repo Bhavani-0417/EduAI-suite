@@ -1,6 +1,7 @@
 import os
 import uuid
 import io
+import logging
 from typing import Optional
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, UploadFile, status
@@ -12,9 +13,12 @@ from app.utils.note_upload_validation import (
     validate_note_upload,
 )
 from app.utils.file_storage import safe_filename_fragment
+from app.utils.note_cloudinary import encode_authenticated_asset
 from app.services.ai.chroma_service import (
     add_to_collection, search_collection, delete_from_collection
 )
+logger = logging.getLogger(__name__)
+
 from app.services.ai.gemini_service import (
     classify_note, summarize_note, answer_question_with_context
 )
@@ -128,14 +132,17 @@ def upload_to_cloudinary(file_bytes: bytes, file_name: str, student_id: str) -> 
             file_bytes,
             folder=f"eduai/notes/{student_id}",
             public_id=f"{uuid.uuid4()}_{safe_filename_fragment(file_name.rsplit('.', 1)[0], 80)}",
-            resource_type="auto"
+            resource_type="auto",
+            type="authenticated",
         )
-        
-        return result["secure_url"]
-    except Exception as e:
-        print(f"Cloudinary upload error: {e}")
-        # Return placeholder if Cloudinary not configured
-        return f"local://{student_id}/{file_name}"
+
+        return encode_authenticated_asset(result)
+    except Exception as exc:
+        logger.exception("Authenticated Cloudinary note upload failed.")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Private note storage is unavailable. Please try again.",
+        ) from exc
 
 
 # ─────────────────────────────────────────
