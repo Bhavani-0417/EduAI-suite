@@ -28,7 +28,7 @@ def upload_vault_document(
     Steps:
     1. Read file bytes
     2. Extract text with OCR (for searchability)
-    3. Encrypt the entire file with AES
+    3. Encrypt the entire file with Fernet authenticated encryption
     4. Save encrypted file to disk
     5. Save metadata to PostgreSQL
     """

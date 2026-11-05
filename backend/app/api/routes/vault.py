@@ -32,7 +32,7 @@ def upload_document(
     POST /api/vault/upload?doc_type=certificate
     Body: multipart file upload
 
-    File is AES encrypted before saving.
+    File is Fernet-encrypted before saving.
     OCR text extracted for search.
     """
     doc = upload_vault_document(db, current_user.id, file, doc_type)

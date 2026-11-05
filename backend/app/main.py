@@ -2,7 +2,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.db.database import engine, Base
-from app.api import code_explainer
 # Import all models so SQLAlchemy knows about them
 # This must happen BEFORE create_all
 from app.models import user, college, academic, notes, career, roadmap, events, vault
@@ -58,4 +57,3 @@ async def root():
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
-app.include_router(code_explainer.router)
