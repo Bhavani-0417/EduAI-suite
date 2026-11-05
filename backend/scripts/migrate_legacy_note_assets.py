@@ -11,8 +11,6 @@ to_type='authenticated' and invalidate=True, then stores a versioned locator.
 
 import argparse
 import logging
-import re
-from urllib.parse import unquote, urlparse
 
 import cloudinary
 import cloudinary.api
@@ -25,46 +23,15 @@ from app.models.notes import Note
 from app.utils.note_cloudinary import (
     CLOUDINARY_AUTH_REF_PREFIX,
     encode_authenticated_asset,
+    parse_legacy_cloudinary_upload_url,
 )
 
 logger = logging.getLogger("legacy-note-assets")
 
 
 def parse_legacy_upload_url(url: str) -> dict[str, str] | None:
-    """Parse a direct Cloudinary upload URL; refuse transformation URLs."""
-    try:
-        parsed = urlparse(url)
-        if parsed.scheme != "https" or parsed.hostname != "res.cloudinary.com":
-            return None
-        parts = [unquote(part) for part in parsed.path.split("/") if part]
-        if len(parts) < 5:
-            return None
-        # /<cloud_name>/<resource_type>/upload/[v123/]<public_id>.<format>
-        if parts[2] != "upload":
-            return None
-        resource_type = parts[1]
-        if resource_type not in {"image", "raw", "video"}:
-            return None
-        asset_parts = parts[3:]
-        if asset_parts and re.fullmatch(r"v\d+", asset_parts[0]):
-            asset_parts = asset_parts[1:]
-        if not asset_parts or any(part.startswith(("c_", "t_", "q_", "f_")) for part in asset_parts[:-1]):
-            return None
-        last = asset_parts[-1]
-        if "." not in last:
-            return None
-        public_id_last, file_format = last.rsplit(".", 1)
-        if not public_id_last or not file_format:
-            return None
-        asset_parts[-1] = public_id_last
-        return {
-            "public_id": "/".join(asset_parts),
-            "resource_type": resource_type,
-            "format": file_format.lower(),
-        }
-    except (TypeError, ValueError):
-        return None
-
+    """Compatibility wrapper around the tested Cloudinary URL parser."""
+    return parse_legacy_cloudinary_upload_url(url)
 
 def _resource(public_id: str, resource_type: str, delivery_type: str) -> dict | None:
     try:

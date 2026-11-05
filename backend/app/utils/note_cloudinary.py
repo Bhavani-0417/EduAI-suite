@@ -2,6 +2,8 @@
 
 import json
 import time
+import re
+from urllib.parse import unquote, urlparse
 import logging
 from collections.abc import Callable
 from typing import Any
@@ -123,3 +125,38 @@ def destroy_authenticated_asset(
         invalidate=True,
     )
     return result.get("result") in {"ok", "not found"}
+
+
+
+def parse_legacy_cloudinary_upload_url(url: str) -> dict[str, str] | None:
+    """Parse an untransformed secure_url returned by Cloudinary's upload API."""
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme != "https" or parsed.hostname != "res.cloudinary.com":
+            return None
+        parts = [unquote(part) for part in parsed.path.split("/") if part]
+        # /<cloud_name>/<resource_type>/upload/[v123/]<public_id>.<format>
+        if len(parts) < 4 or parts[2] != "upload":
+            return None
+        resource_type = parts[1]
+        if resource_type not in {"image", "raw", "video"}:
+            return None
+        asset_parts = parts[3:]
+        if asset_parts and re.fullmatch(r"v\\d+", asset_parts[0]):
+            asset_parts = asset_parts[1:]
+        if not asset_parts or any(part.startswith(("c_", "t_", "q_", "f_")) for part in asset_parts[:-1]):
+            return None
+        public_id_last = asset_parts[-1]
+        if "." not in public_id_last:
+            return None
+        public_id_last, file_format = public_id_last.rsplit(".", 1)
+        if not public_id_last or not file_format:
+            return None
+        asset_parts[-1] = public_id_last
+        return {
+            "public_id": "/".join(asset_parts),
+            "resource_type": resource_type,
+            "format": file_format.lower(),
+        }
+    except (TypeError, ValueError):
+        return None

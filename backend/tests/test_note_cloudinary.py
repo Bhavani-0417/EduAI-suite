@@ -76,3 +76,35 @@ def test_rejects_malformed_or_incomplete_authenticated_reference():
 def test_rejects_upload_responses_missing_asset_metadata():
     with pytest.raises(ValueError):
         encode_authenticated_asset({"public_id": "asset"})
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        (
+            "https://res.cloudinary.com/demo/image/upload/v123/eduai/student/note.pdf",
+            {"public_id": "eduai/student/note", "resource_type": "image", "format": "pdf"},
+        ),
+        (
+            "https://res.cloudinary.com/demo/raw/upload/v12/eduai/student/notes%20scan.tiff",
+            {"public_id": "eduai/student/notes scan", "resource_type": "raw", "format": "tiff"},
+        ),
+    ],
+)
+def test_parse_legacy_direct_cloudinary_upload_urls(url, expected):
+    from app.utils.note_cloudinary import parse_legacy_cloudinary_upload_url
+    assert parse_legacy_cloudinary_upload_url(url) == expected
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://example.com/demo/image/upload/v123/a.pdf",
+        "https://res.cloudinary.com/demo/image/authenticated/a.pdf",
+        "https://res.cloudinary.com/demo/image/upload/c_fill,w_100/a.pdf",
+        "local://student/a.pdf",
+    ],
+)
+def test_legacy_cloudinary_parser_rejects_non_direct_urls(url):
+    from app.utils.note_cloudinary import parse_legacy_cloudinary_upload_url
+    assert parse_legacy_cloudinary_upload_url(url) is None
