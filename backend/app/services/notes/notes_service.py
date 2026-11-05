@@ -17,11 +17,11 @@ from app.utils.note_cloudinary import encode_authenticated_asset
 from app.services.ai.chroma_service import (
     add_to_collection, search_collection, delete_from_collection
 )
-logger = logging.getLogger(__name__)
-
 from app.services.ai.gemini_service import (
     classify_note, summarize_note, answer_question_with_context
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ─────────────────────────────────────────

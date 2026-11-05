@@ -173,7 +173,8 @@ These checks do not replace database-backed integration tests, browser tests, or
 ## Data, privacy, and security
 
 - Use synthetic/demo accounts and files. Do not upload real identity documents, academic records, or other sensitive personal data to a public demo.
-- The vault uses Fernet authenticated encryption for files and new OCR text. Legacy plaintext OCR rows require the documented migration; the document-key derivation remains unchanged for existing encrypted files.
+- The document vault uses Fernet authenticated encryption for files and new OCR text. Legacy plaintext OCR rows require the documented migration; the document-key derivation remains unchanged for existing encrypted files.
+- New learning-note uploads use authenticated Cloudinary delivery with short-lived signed links. Older note assets remain public at Cloudinary until separately converted or deleted; note OCR, summaries, and vector embeddings are not yet encrypted at rest.
 - Share tokens are revocable bearer links: anyone who obtains a valid, unexpired link can download that document until its owner revokes it or it expires.
 - Vault uploads are limited to 10 MB and check PDF/image signatures as well as supported extensions. This is not malware scanning or complete parser validation.
 - Downloads use sanitized attachment filenames and no-store cache headers. Back up the database and vault directory before migrating legacy OCR data with `python -m scripts.migrate_vault_ocr` from `backend/`.
