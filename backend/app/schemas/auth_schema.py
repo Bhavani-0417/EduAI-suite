@@ -1,40 +1,43 @@
-from pydantic import BaseModel, EmailStr
 from typing import Optional
-from app.models.user import UserRole, Branch
 
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
-# ─────────────────────────────────────────
-# REQUEST SCHEMAS (what client sends to us)
-# ─────────────────────────────────────────
+from app.models.user import Branch
+
 
 class RegisterRequest(BaseModel):
-    """Data needed to create a new account"""
-    name: str
-    email: EmailStr          # auto validates email format
-    password: str
-    college_id: str
-    branch: str
-    year: int | str
-    role: str = "student"
-    
+    """Public self-service registration. Roles are assigned only by the server."""
 
-    class Config:
-        # This allows using enum values like "student" instead of UserRole.STUDENT
-        use_enum_values = True
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    name: str = Field(min_length=2, max_length=120)
+    email: EmailStr
+    password: str = Field(min_length=12, max_length=72)
+    college_id: str = Field(min_length=1, max_length=64)
+    branch: Branch
+    year: int = Field(ge=1, le=4)
+
+    @field_validator("password")
+    @classmethod
+    def password_fits_bcrypt(cls, value: str) -> str:
+        # bcrypt processes at most 72 bytes; checking bytes also handles Unicode safely.
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password must be at most 72 UTF-8 bytes for bcrypt.")
+        return value
 
 
 class LoginRequest(BaseModel):
-    """Data needed to login"""
+    """Data needed to log in."""
+
     email: EmailStr
     password: str
 
 
-# ─────────────────────────────────────────
-# RESPONSE SCHEMAS (what we send back)
-# ─────────────────────────────────────────
-
 class UserResponse(BaseModel):
-    """User data we send back — NEVER include password"""
+    """User data sent to clients — never include password hashes."""
+
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     full_name: str
     email: str
@@ -46,18 +49,13 @@ class UserResponse(BaseModel):
     is_verified: bool
     profile_picture: Optional[str] = None
 
-    class Config:
-        from_attributes = True   # allows converting SQLAlchemy model to this schema
-
 
 class LoginResponse(BaseModel):
-    """What we return after successful login"""
-    access_token: str            # the JWT token
-    token_type: str = "bearer"   # standard token type
-    user: UserResponse           # user details
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
 
 
 class RegisterResponse(BaseModel):
-    """What we return after successful registration"""
     message: str
     user: UserResponse
