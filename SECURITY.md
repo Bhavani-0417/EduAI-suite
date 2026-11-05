@@ -9,7 +9,10 @@ EduAI Suite is an evolving portfolio project. It has not undergone an independen
 - Share URLs contain bearer tokens. Anyone who obtains a valid, unexpired token can download the associated document. Owners can revoke an active share token from the vault UI.
 - Vault uploads are capped at 10 MB and limited to PDF, PNG, JPG/JPEG, and BMP. The backend checks file signatures as well as extensions; this is a format sanity check, not malware scanning or full parser validation.
 - New OCR text is Fernet-encrypted before it is stored in PostgreSQL. Existing legacy OCR values remain plaintext until the migration command is run.
-- Download responses use a sanitized UTF-8 attachment filename and no-store cache headers.
+- Download responses use sanitized filenames, reject path traversal and symlink escapes, and set no-store/nosniff headers.
+- Event creation/seeding, college catalog mutations, and college branding updates require an administrator account.
+- Generated output files still share one application directory and do not yet have per-user ownership metadata. Path checks prevent traversal, but they do not provide strong cross-user artifact isolation; do not store or serve private real-user exports in a public multi-user deployment until per-user artifact ownership is implemented.
+- Voice uploads accept WAV/MP3/M4A/WebM and are limited to 15 MB. Extension and size checks are not a substitute for media decoding in a sandbox or malware scanning.
 - Existing generated documents and encrypted blobs already committed to the repository are not removed by \`.gitignore\`. Review their content and provenance. If sensitive material was committed, removing it from the latest tree is not enough; Git history may also need rewriting and credentials may need rotation.
 
 ## Vault encryption compatibility

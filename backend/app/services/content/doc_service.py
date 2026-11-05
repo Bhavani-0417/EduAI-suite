@@ -1,4 +1,5 @@
 import os
+from app.utils.file_storage import safe_filename_fragment
 import uuid
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor
@@ -161,7 +162,7 @@ def generate_document(
 
     # Step 9 — Save file
     file_id = str(uuid.uuid4())
-    file_name = f"{file_id}_{title[:30].replace(' ', '_')}.docx"
+    file_name = f"{file_id}_{safe_filename_fragment(title, 30)}.docx"
     file_path = os.path.join(OUTPUT_DIR, file_name)
     doc.save(file_path)
 

@@ -177,6 +177,8 @@ These checks do not replace database-backed integration tests, browser tests, or
 - Share tokens are revocable bearer links: anyone who obtains a valid, unexpired link can download that document until its owner revokes it or it expires.
 - Vault uploads are limited to 10 MB and check PDF/image signatures as well as supported extensions. This is not malware scanning or complete parser validation.
 - Downloads use sanitized attachment filenames and no-store cache headers. Back up the database and vault directory before migrating legacy OCR data with `python -m scripts.migrate_vault_ocr` from `backend/`.
+- Generated-file download routes reject path traversal and symlink escapes. However, generated files still share one directory without owner metadata; cross-user artifact isolation remains an outstanding production requirement.
+- Event and college-branding mutations are administrator-only. Voice uploads are capped at 15 MB and limited to supported audio extensions.
 - Generated documents and vault uploads are runtime data. Ignore rules do not remove files already committed to Git; review those separately before deleting them or rewriting history.
 - This is a portfolio/development application, not a certified document-management or production security product.
 
