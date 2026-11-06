@@ -42,7 +42,7 @@ services:
       - key: CLOUDINARY_API_SECRET
         sync: false
       - key: CORS_ORIGINS
-        value: https://eduai-web-bhavani.onrender.com,http://localhost:5173
+        value: https://eduai-web-bhavani.onrender.com
       - key: GENERATED_FILES_DIR
         value: /var/data/generated_files
       - key: VAULT_FILES_DIR
@@ -51,6 +51,8 @@ services:
         value: /var/data/chroma_db
       - key: TESSERACT_CMD
         value: /usr/bin/tesseract
+      - key: HF_HOME
+        value: /var/data/huggingface
 
   - type: web
     name: eduai-web-bhavani

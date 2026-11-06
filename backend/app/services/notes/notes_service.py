@@ -51,10 +51,10 @@ def extract_text_from_image(file_bytes: bytes) -> str:
         import pytesseract
         from PIL import Image
         
-        # Set Tesseract path for Windows
-        pytesseract.pytesseract.tesseract_cmd = (
-            r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-        )
+        # Configure Tesseract only when the host supplies an explicit path.
+        configured_tesseract = os.getenv("TESSERACT_CMD") or settings.TESSERACT_CMD
+        if configured_tesseract:
+            pytesseract.pytesseract.tesseract_cmd = configured_tesseract
         
         image = Image.open(io.BytesIO(file_bytes))
         text = pytesseract.image_to_string(image)
@@ -213,17 +213,17 @@ def upload_note(
         if topic_hint and topic_hint.strip():
             classification["topic"] = topic_hint.strip()
 
-            # Step 6 — Index plaintext only in process memory; Chroma persists
-            # ciphertext documents plus vectors and a non-sensitive note ID.
-            chunks = chunk_text(extracted_text)
-            if chunks:
-                add_to_collection(
-                    student_id=student_id,
-                    note_id=note_id,
-                    chunks=chunks,
-                    metadata={},
-                )
-                chunks_indexed = True
+        # Step 6 — Index plaintext only in process memory; Chroma persists
+        # ciphertext documents plus vectors and a non-sensitive note ID.
+        chunks = chunk_text(extracted_text)
+        if chunks:
+            add_to_collection(
+                student_id=student_id,
+                note_id=note_id,
+                chunks=chunks,
+                metadata={},
+            )
+            chunks_indexed = True
 
         # Step 7 — Persist all free-text note fields encrypted.
         note = Note(

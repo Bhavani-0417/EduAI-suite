@@ -4,7 +4,6 @@ const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').repla
 
 const api = axios.create({
   baseURL: BASE_URL,
-  headers: { 'Content-Type': 'application/json' },
 });
 
 api.interceptors.request.use((config) => {
@@ -42,7 +41,6 @@ export const authAPI = {
   login: (data) => api.post('/api/auth/login', data),
   register: (data) => api.post('/api/auth/register', data),
   me: () => api.get('/api/auth/me'),
-  logout: () => api.post('/api/auth/logout'),
 };
 
 export const academicAPI = {
@@ -108,7 +106,6 @@ export const vaultAPI = {
     form.append('file', file);
     return api.post('/api/vault/upload', form, {
       params: { doc_type: docType },
-      headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
   downloadDocument: (id) => downloadFile(`/api/vault/download/${id}`),
@@ -119,10 +116,5 @@ export const vaultAPI = {
   deleteDocument: (id) => api.delete(`/api/vault/${id}`),
 };
 
-export const codeAPI = {
-  explainError: (data) => api.post('/api/code/explain', data),
-  fixCode: (data) => api.post('/api/code/fix', data),
-  reviewCode: (data) => api.post('/api/code/review', data),
-};
 
 export default api;
