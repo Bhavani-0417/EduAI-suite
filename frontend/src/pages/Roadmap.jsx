@@ -80,7 +80,7 @@ export default function Roadmap() {
               {roadmaps.map(r => (
                 <div key={r.id} onClick={() => setSelected(r)} style={{ padding: '10px 12px', background: selected?.id === r.id ? '#1e2745' : '#0d0f14', border: `1px solid ${selected?.id === r.id ? '#6366f1' : '#1e2230'}`, borderRadius: 8, marginBottom: 8, cursor: 'pointer' }}>
                   <div style={{ fontSize: 13, fontWeight: 500, color: '#e2e8f0' }}>{r.goal}</div>
-                  <div style={{ fontSize: 12, color: '#4a5568', marginTop: 2 }}>{r.target_role} · {r.timeline_months}mo</div>
+                  <div style={{ fontSize: 12, color: '#4a5568', marginTop: 2 }}>{r.progress_percent ?? 0}% complete</div>
                 </div>
               ))}
             </div>
@@ -100,7 +100,7 @@ export default function Roadmap() {
             <div style={card}>
               <div style={{ marginBottom: 20 }}>
                 <h2 style={{ fontSize: 18, fontWeight: 700, color: '#e2e8f0', margin: '0 0 4px' }}>{selected.goal}</h2>
-                {selected.target_role && <div style={{ fontSize: 13, color: '#818cf8' }}>→ {selected.target_role}</div>}
+                {selected.total_weeks ? <div style={{ fontSize: 13, color: '#818cf8' }}>{selected.total_weeks} weeks planned</div> : null}
               </div>
               {/* Render roadmap content */}
               {selected.phases ? (
@@ -109,7 +109,7 @@ export default function Roadmap() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                       <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 13, fontWeight: 700 }}>{i + 1}</div>
                       <div style={{ fontSize: 15, fontWeight: 600, color: '#e2e8f0' }}>{phase.title || `Phase ${i + 1}`}</div>
-                      <div style={{ marginLeft: 'auto', fontSize: 12, color: '#4a5568' }}>{phase.duration}</div>
+                      <div style={{ marginLeft: 'auto', fontSize: 12, color: '#4a5568' }}>{phase.duration_weeks ? `${phase.duration_weeks} weeks` : ''}</div>
                     </div>
                     {phase.topics?.map((topic, j) => (
                       <div key={j} onClick={() => markComplete(selected.id, typeof topic === 'string' ? topic : topic.name)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: (selected.completed_topics || []).includes(typeof topic === 'string' ? topic : topic.name) ? '#0c1a0e' : '#0d0f14', border: `1px solid ${(selected.completed_topics || []).includes(typeof topic === 'string' ? topic : topic.name) ? '#14532d' : '#1e2230'}`, borderRadius: 8, marginBottom: 6, cursor: 'pointer' }}>

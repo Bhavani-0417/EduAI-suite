@@ -18,12 +18,13 @@ export default function CodeExplainer() {
 
   const run = async () => {
     if (!code.trim()) return alert('Paste your code first');
+    const language = lang === 'C++' ? 'cpp' : lang.toLowerCase();
     setLoading(true); setResult(null);
     try {
       let r;
-      if (action === 'explain') r = await codeAPI.explainError({ code, error_message: error, language: lang.toLowerCase() });
-      else if (action === 'fix')    r = await codeAPI.fixCode({ code, error_message: error, language: lang.toLowerCase() });
-      else                          r = await codeAPI.reviewCode({ code, language: lang });
+      if (action === 'explain') r = await codeAPI.explainError({ code, error_message: error, language });
+      else if (action === 'fix')    r = await codeAPI.fixCode({ code, error_message: error, language });
+      else                          r = await codeAPI.reviewCode({ code, language });
       setResult(r.data);
     } catch (err) { alert(err.response?.data?.detail || 'Error'); }
     finally { setLoading(false); }

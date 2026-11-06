@@ -29,6 +29,13 @@ export default function Career() {
         const [degree, institution, year, cgpa] = line.split('|').map(part => part.trim());
         return { degree: degree || line, institution: institution || 'Not specified', year: year || 'Not specified', cgpa: cgpa || undefined };
       });
+      if (!education.length && (resumeForm.branch || resumeForm.college || resumeForm.year)) {
+        education.push({
+          degree: resumeForm.branch || 'Undergraduate',
+          institution: resumeForm.college || 'Not specified',
+          year: resumeForm.year || 'Not specified',
+        });
+      }
       const projects = lines(resumeForm.projects).map(line => {
         const [name, description, tech_stack] = line.split('|').map(part => part.trim());
         return { name: name || line, description: description || line, tech_stack: tech_stack || 'Not specified' };

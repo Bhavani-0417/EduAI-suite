@@ -29,10 +29,10 @@ export default function Dashboard() {
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
         <h1 style={{ fontSize: 26, fontWeight: 700, color: '#e2e8f0', margin: 0, letterSpacing: '-0.5px' }}>
-          Welcome back, {user?.name?.split(' ')[0] || 'Student'} 👋
+          Welcome back, {user?.full_name?.split(' ')[0] || 'Student'} 👋
         </h1>
         <p style={{ color: '#4a5568', fontSize: 14, margin: '6px 0 0' }}>
-          {user?.branch} · {user?.college} · Year {user?.year}
+          {user?.branch || 'Student'} · Year {user?.year || '—'}
         </p>
       </div>
 
