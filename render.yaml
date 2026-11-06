@@ -8,7 +8,7 @@ services:
     region: singapore
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    preDeployCommand: python -m alembic upgrade head
+    preDeployCommand: python -m alembic upgrade head && python -m scripts.seed_colleges
     healthCheckPath: /health/ready
     disk:
       name: eduai-persistent-data

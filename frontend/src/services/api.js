@@ -33,7 +33,7 @@ const downloadFile = async (url) => {
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
-  URL.revokeObjectURL(objectUrl);
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
   return response;
 };
 

@@ -8,6 +8,7 @@ from sqlalchemy.orm.attributes import set_committed_value
 from fastapi import HTTPException, UploadFile, status
 
 from app.models.notes import Note, NoteSource
+from app.core.config import settings
 from app.services.vault.encryption_service import encrypt_notes_text, decrypt_notes_text
 from app.utils.note_upload_validation import (
     MAX_NOTE_UPLOAD_BYTES,
