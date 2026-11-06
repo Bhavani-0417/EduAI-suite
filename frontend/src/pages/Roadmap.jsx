@@ -25,7 +25,13 @@ export default function Roadmap() {
   };
 
   const markComplete = async (roadmapId, topicName) => {
-    try { await roadmapAPI.markComplete(roadmapId, topicName); load(); } catch (err) {
+    try {
+      await roadmapAPI.markComplete(roadmapId, topicName);
+      const response = await roadmapAPI.getRoadmaps();
+      const items = response.data.roadmaps || [];
+      setRoadmaps(items);
+      setSelected(items.find(item => item.id === roadmapId) || null);
+    } catch (err) {
       alert(err.response?.data?.detail || 'Could not update topic progress');
     }
   };

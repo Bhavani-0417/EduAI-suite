@@ -221,7 +221,7 @@ Chroma similarity vectors are not ciphertext. Run Chroma and PostgreSQL on encry
 
 ## Current limitations
 
-Some integrations require third-party credentials and running local services. CI does not exercise every feature against a live PostgreSQL database or external AI provider. Deployment configuration, database migrations, rate limiting, backups, and a full security review are still needed before using real users' records.
+Some integrations require third-party credentials and running local services. CI does not exercise every feature against a live PostgreSQL database or external AI provider. The Alembic baseline migration and hosting configuration are included, but live database migration history, encryption/data migrations, rate limiting, backups, and a full security review must be completed before using real users' records.
 
 ## Production deployment
 

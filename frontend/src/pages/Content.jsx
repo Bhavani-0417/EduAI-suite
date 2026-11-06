@@ -23,7 +23,7 @@ export default function Content() {
   const generatePPT = async (e) => {
     e.preventDefault(); setGen(true);
     try {
-      const r = await contentAPI.generatePPT({ ...pptForm, num_slides: Number(pptForm.num_slides), style: pptForm.style.toLowerCase(), include_speaker_notes: true });
+      const r = await contentAPI.generatePPT({ ...pptForm, num_slides: Number(pptForm.num_slides), style: ({ Professional: 'academic', Academic: 'academic', Creative: 'creative', Minimal: 'simple' })[pptForm.style] || 'academic', include_speaker_notes: true });
       const fileName = r.data.download_url.split('/').pop();
       await contentAPI.downloadPPT(fileName);
     } catch (err) { alert(err.response?.data?.detail || 'Generation failed'); }

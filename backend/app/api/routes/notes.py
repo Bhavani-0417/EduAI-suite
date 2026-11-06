@@ -5,7 +5,7 @@ from datetime import datetime
 
 from app.db.database import get_db
 from app.schemas.notes_schema import AskQuestionRequest
-from app.services.notes.notes_service import upload_note, get_notes, ask_question
+from app.services.notes.notes_service import upload_note, get_notes, ask_question, delete_from_collection
 from app.utils.note_cloudinary import resolve_note_asset_url
 from app.services.vault.encryption_service import decrypt_notes_text
 from app.api.middlewares.auth_middleware import get_current_user
