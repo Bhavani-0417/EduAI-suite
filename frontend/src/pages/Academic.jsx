@@ -11,7 +11,7 @@ export default function Academic() {
   const [tab, setTab]               = useState('marks');
 
   const load = () => {
-    academicAPI.getMarks().then(r => setMarks(r.data)).catch(() => {});
+    academicAPI.getMarks().then(r => setMarks(r.data.marks || [])).catch(() => {});
     academicAPI.getCGPA().then(r => setCgpa(r.data)).catch(() => {});
     academicAPI.getWeaknesses().then(r => setWeaknesses(r.data)).catch(() => {});
   };
@@ -35,9 +35,20 @@ export default function Academic() {
 
   const getAIRoadmap = async () => {
     try {
-      const r = await academicAPI.getRoadmap();
-      setRoadmap(r.data); setTab('roadmap');
-    } catch { alert('Add marks first to generate roadmap'); }
+      if (!marks.length) throw new Error('Add marks first to generate roadmap');
+      const skills = marks.map(mark => `${mark.subject}: ${Math.round((mark.marks_obtained / mark.total_marks) * 100)}%`);
+      const weak = weaknesses?.weak_subjects || [];
+      const r = await academicAPI.generateRoadmap({
+        goal: weak.length ? `Improve academic performance in ${weak.join(', ')}` : 'Improve overall academic performance',
+        current_skills: skills,
+        available_hours_per_day: 2,
+        target_months: 3,
+      });
+      setRoadmap(r.data);
+      setTab('roadmap');
+    } catch (err) {
+      alert(err.message || err.response?.data?.detail || 'Could not generate an academic roadmap');
+    }
   };
 
   const pct = (m) => Math.round((m.marks_obtained / m.total_marks) * 100);

@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, UploadFile, File, Query
+from fastapi import APIRouter, Depends, UploadFile, File, Query, Form
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from datetime import datetime
 
 from app.db.database import get_db
 from app.schemas.notes_schema import AskQuestionRequest
-from app.services.notes.notes_service import upload_note, get_notes, ask_question
+from app.services.notes.notes_service import upload_note, get_notes, ask_question, delete_from_collection
 from app.utils.note_cloudinary import resolve_note_asset_url
 from app.services.vault.encryption_service import decrypt_notes_text
 from app.api.middlewares.auth_middleware import get_current_user
@@ -20,6 +20,8 @@ router = APIRouter(
 @router.post("/upload", status_code=201)
 def upload(
     file: UploadFile = File(...),
+    subject: Optional[str] = Form(None),
+    topic: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -36,7 +38,7 @@ def upload(
     4. Store in ChromaDB
     5. Save metadata to PostgreSQL
     """
-    note = upload_note(db, current_user.id, file)
+    note = upload_note(db, current_user.id, file, subject_hint=subject, topic_hint=topic)
     
     return {
         "message": "Note uploaded successfully!",

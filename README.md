@@ -221,7 +221,25 @@ Chroma similarity vectors are not ciphertext. Run Chroma and PostgreSQL on encry
 
 ## Current limitations
 
-Some integrations require third-party credentials and running local services. CI does not exercise every feature against a live PostgreSQL database or external AI provider. Deployment configuration, database migrations, rate limiting, backups, and a full security review are still needed before using real users' records.
+Some integrations require third-party credentials and running local services. CI does not exercise every feature against a live PostgreSQL database or external AI provider. The Alembic baseline migration and hosting configuration are included, but live database migration history, encryption/data migrations, rate limiting, backups, and a full security review must be completed before using real users' records.
+
+## Production deployment
+
+A Render Blueprint is provided in [render.yaml](render.yaml). It defines a Docker-based FastAPI service, a static Vite frontend, PostgreSQL, and a persistent application disk. Review the compute plans and charges in Render before creating resources. EduAI stores ChromaDB indexes, generated files, and encrypted vault files locally, so those paths must use persistent storage rather than an ephemeral filesystem.
+
+Before production users register, the Blueprint runs an idempotent starter-college seed after the Alembic migration. After the first successful deployment, open a private Shell for the API service and run `python -m scripts.create_admin` to create the first administrator interactively. The script accepts no password argument, checks for an existing email, and never creates an admin through the public registration API.
+
+The Blueprint prompts for these secrets in Render: `GOOGLE_API_KEY`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET`. It generates independent `SECRET_KEY` and `JWT_SECRET_KEY` values for a new installation. When importing any existing encrypted notes, vault OCR, or vault files, set `SECRET_KEY` to the exact original value before starting the application or running data migrations. Never commit production credentials or paste them into issue comments.
+
+The backend image installs Tesseract OCR and FFmpeg. The frontend is built with `VITE_API_URL` pointing to the API service. The API's `/health/ready` endpoint verifies the PostgreSQL connection.
+
+### Database schema migrations
+
+New databases are created with Alembic during the Render pre-deploy step, followed by an idempotent seed of the starter college catalog. For an existing database previously initialized by SQLAlchemy `create_all`, do not run the initial migration blindly: first verify all eight application tables and their columns match the baseline, back up the database, and then mark the baseline as applied with `python -m alembic stamp 0001_initial_schema`. New installations should use `python -m alembic upgrade head`.
+
+### Existing encrypted data
+
+Do not run the existing notes, vault OCR, or Cloudinary asset migrations automatically during deployment. They are data migrations and require backups of PostgreSQL, the complete Chroma persistence directory, Cloudinary asset inventory, and vault files. Follow the runbooks below and retain the original `SECRET_KEY` so previously encrypted content remains readable.
 
 ## Screenshots
 

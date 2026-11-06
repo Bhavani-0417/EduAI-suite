@@ -23,8 +23,9 @@ export default function Content() {
   const generatePPT = async (e) => {
     e.preventDefault(); setGen(true);
     try {
-      const r = await contentAPI.generatePPT({ ...pptForm, num_slides: +pptForm.num_slides });
-      download(r.data, `${pptForm.topic.replace(/\s+/g, '_')}.pptx`);
+      const r = await contentAPI.generatePPT({ ...pptForm, num_slides: Number(pptForm.num_slides), style: ({ Professional: 'academic', Academic: 'academic', Creative: 'creative', Minimal: 'simple' })[pptForm.style] || 'academic', include_speaker_notes: true });
+      const fileName = r.data.download_url.split('/').pop();
+      await contentAPI.downloadPPT(fileName);
     } catch (err) { alert(err.response?.data?.detail || 'Generation failed'); }
     finally { setGen(false); }
   };
@@ -32,8 +33,18 @@ export default function Content() {
   const generateDoc = async (e) => {
     e.preventDefault(); setGen(true);
     try {
-      const r = await contentAPI.generateDoc(docForm);
-      download(r.data, `${docForm.topic.replace(/\s+/g, '_')}.docx`);
+      const docTypeMap = { 'Assignment': 'assignment', 'Project Report': 'project_report', 'Lab Manual': 'lab_manual', 'IEEE Paper': 'research_paper' };
+      const r = await contentAPI.generateDoc({
+        title: docForm.topic,
+        topic: docForm.topic,
+        doc_type: docTypeMap[docForm.doc_type] || 'assignment',
+        subject: docForm.subject || undefined,
+        college_name: docForm.college_name || undefined,
+        key_points: docForm.description.split(/[,\n]/).map(point => point.trim()).filter(Boolean),
+        include_references: true,
+      });
+      const fileName = r.data.download_url.split('/').pop();
+      await contentAPI.downloadDoc(fileName);
     } catch (err) { alert(err.response?.data?.detail || 'Generation failed'); }
     finally { setGen(false); }
   };

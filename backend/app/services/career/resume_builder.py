@@ -17,7 +17,7 @@ from app.services.career.resume_ai_service import (
     generate_ats_tips
 )
 
-OUTPUT_DIR = "generated_files"
+OUTPUT_DIR = os.getenv("GENERATED_FILES_DIR", "generated_files")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Color palette

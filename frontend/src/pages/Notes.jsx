@@ -13,7 +13,7 @@ export default function Notes() {
   const [asking, setAsking]       = useState(false);
   const fileRef = useRef();
 
-  const load = () => notesAPI.getNotes().then(r => setNotes(r.data)).catch(() => {});
+  const load = () => notesAPI.getNotes().then(r => setNotes(r.data.notes || [])).catch(() => {});
   useEffect(() => { load(); }, []);
 
   const uploadNote = async (e) => {
