@@ -23,7 +23,7 @@ api.interceptors.response.use(
   }
 );
 
-const multipart = { headers: { 'Content-Type': 'multipart/form-data' } };
+const multipart = {};
 const downloadFile = async (url) => {
   const response = await api.get(url, { responseType: 'blob' });
   const objectUrl = URL.createObjectURL(response.data);
@@ -116,5 +116,11 @@ export const vaultAPI = {
   deleteDocument: (id) => api.delete(`/api/vault/${id}`),
 };
 
+
+export const codeAPI = {
+  explainError: (data) => api.post('/api/code/explain', data),
+  fixCode: (data) => api.post('/api/code/fix', data),
+  reviewCode: (data) => api.post('/api/code/review', data),
+};
 
 export default api;

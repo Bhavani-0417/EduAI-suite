@@ -67,7 +67,7 @@ export default function Dashboard() {
       )}
 
       {/* Module grid */}
-      <h2 style={{ fontSize: 16, fontWeight: 600, color: '#9ca3af', marginBottom: 16, letterSpacing: '0.05em', textTransform: 'uppercase', fontSize: 12 }}>All Modules</h2>
+      <h2 style={{ fontSize: 12, fontWeight: 600, color: '#9ca3af', marginBottom: 16, letterSpacing: '0.05em', textTransform: 'uppercase' }}>All Modules</h2>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
         {MODULES.map(mod => (
           <Link key={mod.path} to={mod.path} style={{ textDecoration: 'none' }}>
