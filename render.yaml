@@ -1,0 +1,74 @@
+# Render Blueprint for EduAI Suite.
+# Review paid compute and persistent storage charges before creating resources.
+services:
+  - type: web
+    name: eduai-api-bhavani
+    runtime: docker
+    plan: 1c-2g
+    region: singapore
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    preDeployCommand: python -m alembic upgrade head
+    healthCheckPath: /health/ready
+    disk:
+      name: eduai-persistent-data
+      mountPath: /var/data
+      sizeGB: 5
+    envVars:
+      - key: APP_NAME
+        value: EduAI Suite
+      - key: APP_VERSION
+        value: 1.0.0
+      - key: DEBUG
+        value: "false"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: eduai-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: JWT_EXPIRE_MINUTES
+        value: "10080"
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: CORS_ORIGINS
+        value: https://eduai-web-bhavani.onrender.com,http://localhost:5173
+      - key: GENERATED_FILES_DIR
+        value: /var/data/generated_files
+      - key: VAULT_FILES_DIR
+        value: /var/data/vault_files
+      - key: CHROMA_PERSIST_DIR
+        value: /var/data/chroma_db
+      - key: TESSERACT_CMD
+        value: /usr/bin/tesseract
+
+  - type: web
+    name: eduai-web-bhavani
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://eduai-api-bhavani.onrender.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+databases:
+  - name: eduai-db
+    databaseName: eduai_db
+    user: eduai
+    plan: 0.5c-1g
+    region: singapore

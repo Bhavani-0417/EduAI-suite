@@ -11,7 +11,7 @@ from io import BytesIO
 from app.schemas.template_schema import CollegeTemplate
 from app.services.ai.content_planner import plan_presentation
 
-OUTPUT_DIR = "generated_files"
+OUTPUT_DIR = os.getenv("GENERATED_FILES_DIR", "generated_files")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 

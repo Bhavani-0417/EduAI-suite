@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile, File, Query
+from fastapi import APIRouter, Depends, UploadFile, File, Query, Form
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from datetime import datetime
@@ -20,6 +20,8 @@ router = APIRouter(
 @router.post("/upload", status_code=201)
 def upload(
     file: UploadFile = File(...),
+    subject: Optional[str] = Form(None),
+    topic: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -36,7 +38,7 @@ def upload(
     4. Store in ChromaDB
     5. Save metadata to PostgreSQL
     """
-    note = upload_note(db, current_user.id, file)
+    note = upload_note(db, current_user.id, file, subject_hint=subject, topic_hint=topic)
     
     return {
         "message": "Note uploaded successfully!",

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import Optional, List
 
@@ -14,6 +14,7 @@ from app.services.academic_service import (
 )
 from app.api.middlewares.auth_middleware import get_current_user
 from app.models.user import User
+from app.models.academic import Mark
 
 router = APIRouter(
     prefix="/api/academic",
@@ -108,3 +109,23 @@ def update_my_profile(
     """
     updated = update_profile(db, current_user, data)
     return UserResponse.model_validate(updated)
+
+@router.delete("/marks/{mark_id}")
+def delete_mark(
+    mark_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete one mark owned by the authenticated student."""
+    mark = db.query(Mark).filter(
+        Mark.id == mark_id,
+        Mark.student_id == current_user.id,
+    ).first()
+    if not mark:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Mark not found.",
+        )
+    db.delete(mark)
+    db.commit()
+    return {"message": "Mark deleted successfully."}

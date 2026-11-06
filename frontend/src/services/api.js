@@ -1,117 +1,117 @@
 import axios from 'axios';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '');
 
 const api = axios.create({
   baseURL: BASE_URL,
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Auto-attach JWT token
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// Auto-redirect on 401
 api.interceptors.response.use(
-  (res) => res,
-  (err) => {
-    if (err.response?.status === 401) {
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
       localStorage.removeItem('token');
-      window.location.href = '/login';
+      if (window.location.pathname !== '/login') window.location.href = '/login';
     }
-    return Promise.reject(err);
+    return Promise.reject(error);
   }
 );
 
-// ─── Auth ───────────────────────────────────────────────────────────────────
+const multipart = { headers: { 'Content-Type': 'multipart/form-data' } };
+const downloadFile = async (url) => {
+  const response = await api.get(url, { responseType: 'blob' });
+  const objectUrl = URL.createObjectURL(response.data);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = url.split('/').pop() || 'download';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
+  return response;
+};
+
 export const authAPI = {
   login: (data) => api.post('/api/auth/login', data),
   register: (data) => api.post('/api/auth/register', data),
   me: () => api.get('/api/auth/me'),
+  logout: () => api.post('/api/auth/logout'),
 };
 
-// ─── Academic Dashboard ──────────────────────────────────────────────────────
 export const academicAPI = {
   getMarks: () => api.get('/api/academic/marks'),
   addMark: (data) => api.post('/api/academic/marks', data),
   deleteMark: (id) => api.delete(`/api/academic/marks/${id}`),
   getCGPA: () => api.get('/api/academic/cgpa'),
-  getWeaknesses: () => api.get('/api/academic/weaknesses'),
-  getRoadmap: () => api.get('/api/academic/roadmap'),
-  uploadMarksheet: (file) => {
-    const fd = new FormData(); fd.append('file', file);
-    return api.post('/api/academic/upload-marksheet', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-  },
+  getWeaknesses: () => api.get('/api/academic/weakness'),
+  generateRoadmap: (data) => api.post('/api/roadmap/generate', data),
 };
 
-// ─── Knowledge Hub ───────────────────────────────────────────────────────────
 export const notesAPI = {
-  getNotes: () => api.get('/api/notes'),
+  getNotes: () => api.get('/api/notes/'),
   uploadNote: (file, subject, topic) => {
-    const fd = new FormData();
-    fd.append('file', file); fd.append('subject', subject); fd.append('topic', topic || '');
-    return api.post('/api/notes/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+    const form = new FormData();
+    form.append('file', file);
+    if (subject) form.append('subject', subject);
+    if (topic) form.append('topic', topic);
+    return api.post('/api/notes/upload', form, multipart);
   },
   deleteNote: (id) => api.delete(`/api/notes/${id}`),
   askQuestion: (question, subject) => api.post('/api/notes/ask', { question, subject }),
-  summarize: (noteId) => api.post(`/api/notes/${noteId}/summarize`),
 };
 
-// ─── Content Generator ───────────────────────────────────────────────────────
 export const contentAPI = {
-  generatePPT: (data) => api.post('/api/content/generate-ppt', data, { responseType: 'blob' }),
-  generateDoc: (data) => api.post('/api/content/generate-doc', data, { responseType: 'blob' }),
-  generateLabManual: (data) => api.post('/api/content/generate-lab-manual', data, { responseType: 'blob' }),
-  getTemplates: () => api.get('/api/content/templates'),
+  generatePPT: (data) => api.post('/api/content/generate/ppt', data),
+  generateDoc: (data) => api.post('/api/content/generate/document', data),
+  downloadPPT: (fileName) => downloadFile(`/api/content/download/ppt/${encodeURIComponent(fileName)}`),
+  downloadDoc: (fileName) => downloadFile(`/api/content/download/doc/${encodeURIComponent(fileName)}`),
 };
 
-// ─── Career Center ───────────────────────────────────────────────────────────
 export const careerAPI = {
-  generateResume: (data) => api.post('/api/career/resume/generate', data, { responseType: 'blob' }),
-  parseResume: (file) => {
-    const fd = new FormData(); fd.append('file', file);
-    return api.post('/api/career/resume/parse', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-  },
-  matchJD: (data) => api.post('/api/career/resume/match-jd', data),
-  getJobs: () => api.get('/api/career/jobs'),
-  addJob: (data) => api.post('/api/career/jobs', data),
-  updateJob: (id, data) => api.put(`/api/career/jobs/${id}`, data),
-  deleteJob: (id) => api.delete(`/api/career/jobs/${id}`),
+  generateResume: (data) => api.post('/api/career/resume/build', data),
+  downloadResume: (fileName) => downloadFile(`/api/career/resume/download/${encodeURIComponent(fileName)}`),
+  matchJD: (data) => api.post('/api/career/jd-match', data),
+  getJobs: () => api.get('/api/career/applications'),
+  addJob: (data) => api.post('/api/career/applications', data),
+  updateJob: (id, data) => api.put(`/api/career/applications/${id}`, data),
+  deleteJob: (id) => api.delete(`/api/career/applications/${id}`),
   getAnalytics: () => api.get('/api/career/analytics'),
 };
 
-// ─── Goal & Roadmap ──────────────────────────────────────────────────────────
 export const roadmapAPI = {
   generateRoadmap: (data) => api.post('/api/roadmap/generate', data),
-  getRoadmaps: () => api.get('/api/roadmap'),
-  markComplete: (id, topicId) => api.put(`/api/roadmap/${id}/topic/${topicId}/complete`),
+  getRoadmaps: () => api.get('/api/roadmap/'),
+  markComplete: (id, topic) => api.post(`/api/roadmap/${id}/complete-topic`, { topic }),
+  deleteRoadmap: (id) => api.delete(`/api/roadmap/${id}`),
 };
 
-// ─── Chatbot ─────────────────────────────────────────────────────────────────
 export const chatAPI = {
   sendMessage: (data) => api.post('/api/chat/message', data),
-  getHistory: () => api.get('/api/chat/history'),
-  clearHistory: () => api.delete('/api/chat/history'),
   transcribeVoice: (blob) => {
-    const fd = new FormData(); fd.append('audio', blob, 'voice.webm');
-    return api.post('/api/chat/voice', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+    const form = new FormData();
+    form.append('file', blob, 'voice.webm');
+    return api.post('/api/chat/voice', form, multipart);
   },
 };
 
-// ─── Document Vault ──────────────────────────────────────────────────────────
 export const vaultAPI = {
   getDocuments: () => api.get('/api/vault/'),
   uploadDocument: (file, docType) => {
-    const fd = new FormData();
-    fd.append('file', file);
-    return api.post('/api/vault/upload', fd, {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post('/api/vault/upload', form, {
       params: { doc_type: docType },
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  downloadDocument: (id) => downloadFile(`/api/vault/download/${id}`),
   shareDocument: (id, hours) => api.post(`/api/vault/share/${id}`, null, {
     params: { expire_hours: hours },
   }),
@@ -119,7 +119,6 @@ export const vaultAPI = {
   deleteDocument: (id) => api.delete(`/api/vault/${id}`),
 };
 
-// ─── Code Explainer ──────────────────────────────────────────────────────────
 export const codeAPI = {
   explainError: (data) => api.post('/api/code/explain', data),
   fixCode: (data) => api.post('/api/code/fix', data),

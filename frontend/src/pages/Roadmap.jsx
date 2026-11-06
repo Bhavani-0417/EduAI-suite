@@ -7,20 +7,27 @@ export default function Roadmap() {
   const [generating, setGen]    = useState(false);
   const [selected, setSelected] = useState(null);
 
-  const load = () => roadmapAPI.getRoadmaps().then(r => setRoadmaps(r.data)).catch(() => {});
+  const load = () => roadmapAPI.getRoadmaps().then(r => setRoadmaps(r.data.roadmaps || [])).catch(() => {});
   useEffect(() => { load(); }, []);
 
   const generate = async (e) => {
     e.preventDefault(); setGen(true);
     try {
-      const r = await roadmapAPI.generateRoadmap({ ...form, timeline_months: +form.timeline_months });
+      const r = await roadmapAPI.generateRoadmap({
+        goal: form.target_role ? `${form.goal} — target role: ${form.target_role}` : form.goal,
+        current_skills: form.current_skills.split(/[,\n]/).map(skill => skill.trim()).filter(Boolean),
+        available_hours_per_day: 2,
+        target_months: Number(form.timeline_months),
+      });
       load(); setSelected(r.data);
     } catch (err) { alert(err.response?.data?.detail || 'Error generating roadmap'); }
     finally { setGen(false); }
   };
 
-  const markComplete = async (roadmapId, topicId) => {
-    try { await roadmapAPI.markComplete(roadmapId, topicId); load(); } catch {}
+  const markComplete = async (roadmapId, topicName) => {
+    try { await roadmapAPI.markComplete(roadmapId, topicName); load(); } catch (err) {
+      alert(err.response?.data?.detail || 'Could not update topic progress');
+    }
   };
 
   return (
@@ -99,11 +106,11 @@ export default function Roadmap() {
                       <div style={{ marginLeft: 'auto', fontSize: 12, color: '#4a5568' }}>{phase.duration}</div>
                     </div>
                     {phase.topics?.map((topic, j) => (
-                      <div key={j} onClick={() => markComplete(selected.id, topic.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: topic.completed ? '#0c1a0e' : '#0d0f14', border: `1px solid ${topic.completed ? '#14532d' : '#1e2230'}`, borderRadius: 8, marginBottom: 6, cursor: 'pointer' }}>
-                        <div style={{ width: 18, height: 18, borderRadius: '50%', border: `2px solid ${topic.completed ? '#10b981' : '#1e2230'}`, background: topic.completed ? '#10b981' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#fff', flexShrink: 0 }}>
-                          {topic.completed ? '✓' : ''}
+                      <div key={j} onClick={() => markComplete(selected.id, typeof topic === 'string' ? topic : topic.name)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: (selected.completed_topics || []).includes(typeof topic === 'string' ? topic : topic.name) ? '#0c1a0e' : '#0d0f14', border: `1px solid ${(selected.completed_topics || []).includes(typeof topic === 'string' ? topic : topic.name) ? '#14532d' : '#1e2230'}`, borderRadius: 8, marginBottom: 6, cursor: 'pointer' }}>
+                        <div style={{ width: 18, height: 18, borderRadius: '50%', border: `2px solid ${(selected.completed_topics || []).includes(typeof topic === 'string' ? topic : topic.name) ? '#10b981' : '#1e2230'}`, background: (selected.completed_topics || []).includes(typeof topic === 'string' ? topic : topic.name) ? '#10b981' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#fff', flexShrink: 0 }}>
+                          {(selected.completed_topics || []).includes(typeof topic === 'string' ? topic : topic.name) ? '✓' : ''}
                         </div>
-                        <span style={{ fontSize: 13, color: topic.completed ? '#86efac' : '#9ca3af' }}>{typeof topic === 'string' ? topic : topic.name}</span>
+                        <span style={{ fontSize: 13, color: (selected.completed_topics || []).includes(typeof topic === 'string' ? topic : topic.name) ? '#86efac' : '#9ca3af' }}>{typeof topic === 'string' ? topic : topic.name}</span>
                       </div>
                     ))}
                   </div>

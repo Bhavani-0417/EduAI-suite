@@ -155,7 +155,9 @@ def upload_note(
     db: Session,
     student_id: str,
     file: UploadFile,
-    source: str = "student"
+    source: str = "student",
+    subject_hint: Optional[str] = None,
+    topic_hint: Optional[str] = None,
 ) -> Note:
     """
     Complete note upload pipeline:
@@ -205,6 +207,11 @@ def upload_note(
         if extracted_text:
             classification = classify_note(extracted_text)
             summary = summarize_note(extracted_text)
+
+        if subject_hint and subject_hint.strip():
+            classification["subject"] = subject_hint.strip()
+        if topic_hint and topic_hint.strip():
+            classification["topic"] = topic_hint.strip()
 
             # Step 6 — Index plaintext only in process memory; Chroma persists
             # ciphertext documents plus vectors and a non-sensitive note ID.

@@ -11,12 +11,12 @@ export default function Career() {
   const [matchForm, setMF]    = useState({ resume_text: '', job_description: '' });
   const [matchLoading, setML] = useState(false);
   const [genLoading, setGL]   = useState(false);
-  const [resumeForm, setRF]   = useState({ name: '', email: '', phone: '', college: '', branch: '', year: '', skills: '', experience: '', projects: '', education: '', career_objective: '' });
+  const [resumeForm, setRF]   = useState({ name: '', email: '', phone: '', city: '', college: '', branch: '', year: '', skills: '', experience: '', projects: '', education: '', career_objective: '' });
   const [jobForm, setJF]      = useState({ company: '', role: '', applied_date: '', status: 'applied', job_url: '', notes: '' });
   const [showJobForm, setSJF] = useState(false);
 
   const load = () => {
-    careerAPI.getJobs().then(r => setJobs(r.data)).catch(() => {});
+    careerAPI.getJobs().then(r => setJobs(r.data.applications || [])).catch(() => {});
     careerAPI.getAnalytics().then(r => setAna(r.data)).catch(() => {});
   };
   useEffect(() => { load(); }, []);
@@ -24,9 +24,34 @@ export default function Career() {
   const generateResume = async (e) => {
     e.preventDefault(); setGL(true);
     try {
-      const r = await careerAPI.generateResume(resumeForm);
-      const url = URL.createObjectURL(r.data);
-      const a = document.createElement('a'); a.href = url; a.download = `${resumeForm.name}_Resume.pdf`; a.click();
+      const lines = (value) => value.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+      const education = lines(resumeForm.education).map(line => {
+        const [degree, institution, year, cgpa] = line.split('|').map(part => part.trim());
+        return { degree: degree || line, institution: institution || 'Not specified', year: year || 'Not specified', cgpa: cgpa || undefined };
+      });
+      const projects = lines(resumeForm.projects).map(line => {
+        const [name, description, tech_stack] = line.split('|').map(part => part.trim());
+        return { name: name || line, description: description || line, tech_stack: tech_stack || 'Not specified' };
+      });
+      const experience = lines(resumeForm.experience).map(line => {
+        const [role, company, duration, description] = line.split('|').map(part => part.trim());
+        return { role: role || 'Experience', company: company || 'Not specified', duration: duration || 'Not specified', description: description || line };
+      });
+      const payload = {
+        full_name: resumeForm.name,
+        email: resumeForm.email,
+        phone: resumeForm.phone || 'Not provided',
+        city: resumeForm.city || 'Not provided',
+        objective: resumeForm.career_objective || undefined,
+        target_role: resumeForm.branch || undefined,
+        education,
+        skills: resumeForm.skills.split(',').map(skill => skill.trim()).filter(Boolean),
+        projects,
+        experience,
+      };
+      const r = await careerAPI.generateResume(payload);
+      const fileName = r.data.download_url.split('/').pop();
+      await careerAPI.downloadResume(fileName);
     } catch (err) { alert(err.response?.data?.detail || 'Error generating resume'); }
     finally { setGL(false); }
   };
@@ -42,8 +67,15 @@ export default function Career() {
 
   const addJob = async (e) => {
     e.preventDefault();
-    try { await careerAPI.addJob(jobForm); setSJF(false); setJF({ company: '', role: '', applied_date: '', status: 'applied', job_url: '', notes: '' }); load(); }
-    catch (err) { alert(err.response?.data?.detail || 'Error adding job'); }
+    try {
+      const created = await careerAPI.addJob({ company: jobForm.company, role: jobForm.role, notes: jobForm.notes || undefined });
+      if (jobForm.status !== 'applied') {
+        await careerAPI.updateJob(created.data.id, { status: jobForm.status, notes: jobForm.notes || undefined });
+      }
+      setSJF(false);
+      setJF({ company: '', role: '', applied_date: '', status: 'applied', job_url: '', notes: '' });
+      load();
+    } catch (err) { alert(err.response?.data?.detail || 'Error adding job'); }
   };
 
   return (
@@ -65,16 +97,16 @@ export default function Career() {
             <h3 style={cardTitle}>📄 ATS Resume Builder</h3>
             <form onSubmit={generateResume}>
               {[['Full Name', 'name', true], ['Email', 'email', true], ['Phone', 'phone', false],
-                ['College', 'college', false], ['Branch / Degree', 'branch', false], ['Year', 'year', false]].map(([l, k, r]) => (
+                ['City', 'city', false], ['College', 'college', false], ['Branch / Degree', 'branch', false], ['Year', 'year', false]].map(([l, k, r]) => (
                 <div key={k} style={{ marginBottom: 11 }}>
                   <label style={lbl}>{l}</label>
                   <input required={r} placeholder={l} value={resumeForm[k]} onChange={e => setRF({ ...resumeForm, [k]: e.target.value })} style={inputStyle} />
                 </div>
               ))}
               {[['Skills (comma separated)', 'skills', 'Python, React, Machine Learning...', 3],
-                ['Projects', 'projects', 'Project name: description...', 3],
-                ['Experience', 'experience', 'Internships, part-time work...', 2],
-                ['Education', 'education', 'Degrees, certifications...', 2],
+                ['Projects (one per line: name | description | tech stack)', 'projects', 'Project name | description | Python, FastAPI', 3],
+                ['Experience (one per line: role | company | duration | description)', 'experience', 'AI Intern | Company | 3 months | Built an ML pipeline', 2],
+                ['Education (one per line: degree | institution | year | CGPA)', 'education', 'B.Tech AI & DS | Your College | 2026 | 8.2', 2],
                 ['Career Objective', 'career_objective', 'Your career goal...', 2]].map(([l, k, ph, rows]) => (
                 <div key={k} style={{ marginBottom: 11 }}>
                   <label style={lbl}>{l}</label>
@@ -110,10 +142,10 @@ export default function Career() {
         <div>
           {analytics && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 24 }}>
-              {[['Total Applied', analytics.total_applied, '#6366f1'],
-                ['Interviews', analytics.interviews, '#f59e0b'],
-                ['Offers', analytics.offers, '#10b981'],
-                ['Match Score Avg', `${analytics.avg_match_score || 0}%`, '#ec4899']].map(([l, v, c]) => (
+              {[['Total Applied', analytics.total_applications, '#6366f1'],
+                ['Interviews', analytics.status_breakdown?.interview || 0, '#f59e0b'],
+                ['Offers', analytics.status_breakdown?.offer || 0, '#10b981'],
+                ['Match Score Avg', `${analytics.average_match_score || 0}%`, '#ec4899']].map(([l, v, c]) => (
                 <div key={l} style={{ background: '#13161e', border: '1px solid #1e2230', borderRadius: 10, padding: '14px 16px' }}>
                   <div style={{ fontSize: 11, color: '#4a5568', marginBottom: 4 }}>{l}</div>
                   <div style={{ fontSize: 24, fontWeight: 700, color: c }}>{v ?? 0}</div>
@@ -130,7 +162,7 @@ export default function Career() {
             <div style={{ ...card, marginBottom: 20 }}>
               <h3 style={cardTitle}>Add Job Application</h3>
               <form onSubmit={addJob} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                {[['Company', 'company', true], ['Role', 'role', true], ['Applied Date', 'applied_date', false, 'date'], ['Job URL', 'job_url', false]].map(([l, k, r, type = 'text']) => (
+                {[['Company', 'company', true], ['Role', 'role', true]].map(([l, k, r]) => (
                   <div key={k}>
                     <label style={lbl}>{l}</label>
                     <input type={type} required={r} placeholder={l} value={jobForm[k]} onChange={e => setJF({ ...jobForm, [k]: e.target.value })} style={inputStyle} />
@@ -205,21 +237,21 @@ export default function Career() {
                     <div style={{ height: '100%', width: `${matchResult.match_score}%`, background: matchResult.match_score >= 70 ? '#10b981' : matchResult.match_score >= 50 ? '#f59e0b' : '#ef4444', borderRadius: 4 }} />
                   </div>
                 </div>
-                {matchResult.matched_keywords?.length > 0 && (
+                {matchResult.matched_skills?.length > 0 && (
                   <div style={{ marginBottom: 16 }}>
                     <div style={{ fontSize: 13, color: '#10b981', fontWeight: 500, marginBottom: 8 }}>✓ Matched Keywords</div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                      {matchResult.matched_keywords.map(k => (
+                      {matchResult.matched_skills.map(k => (
                         <span key={k} style={{ background: '#0c1a0e', border: '1px solid #14532d', color: '#86efac', padding: '3px 10px', borderRadius: 20, fontSize: 12 }}>{k}</span>
                       ))}
                     </div>
                   </div>
                 )}
-                {matchResult.missing_keywords?.length > 0 && (
+                {matchResult.missing_skills?.length > 0 && (
                   <div>
                     <div style={{ fontSize: 13, color: '#ef4444', fontWeight: 500, marginBottom: 8 }}>✗ Missing Keywords</div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                      {matchResult.missing_keywords.map(k => (
+                      {matchResult.missing_skills.map(k => (
                         <span key={k} style={{ background: '#1a0c0c', border: '1px solid #7f1d1d', color: '#fca5a5', padding: '3px 10px', borderRadius: 20, fontSize: 12 }}>{k}</span>
                       ))}
                     </div>

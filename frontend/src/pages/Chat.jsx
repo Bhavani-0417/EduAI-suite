@@ -12,10 +12,6 @@ export default function Chat() {
   const chunksRef               = useRef([]);
 
   useEffect(() => {
-    chatAPI.getHistory().then(r => setMessages(r.data || [])).catch(() => {});
-  }, []);
-
-  useEffect(() => {
     messagesEnd.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
@@ -25,8 +21,9 @@ export default function Chat() {
     setMessages(prev => [...prev, userMsg]);
     setInput(''); setLoading(true);
     try {
-      const r = await chatAPI.sendMessage({ message: text, mode });
-      const botMsg = { role: 'assistant', content: r.data.answer || r.data.response || JSON.stringify(r.data), timestamp: new Date().toISOString(), sources: r.data.sources };
+      const conversation_history = messages.slice(-12).map(({ role, content }) => ({ role, content }));
+      const r = await chatAPI.sendMessage({ message: text, mode, conversation_history });
+      const botMsg = { role: 'assistant', content: r.data.message || 'No response received.', timestamp: new Date().toISOString(), sources: r.data.sources };
       setMessages(prev => [...prev, botMsg]);
     } catch (err) {
       setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, something went wrong. Please try again.', timestamp: new Date().toISOString() }]);
@@ -43,8 +40,16 @@ export default function Chat() {
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
         try {
           const r = await chatAPI.transcribeVoice(blob);
-          const text = r.data.text || r.data.transcript;
-          if (text) sendMessage(text);
+          if (r.data.transcribed_text && r.data.ai_reply) {
+            const timestamp = new Date().toISOString();
+            setMessages(prev => [
+              ...prev,
+              { role: 'user', content: r.data.transcribed_text, timestamp },
+              { role: 'assistant', content: r.data.ai_reply, timestamp, sources: r.data.sources || [] },
+            ]);
+          } else {
+            alert(r.data.error || 'Could not understand audio. Please try again.');
+          }
         } catch { alert('Voice transcription failed'); }
       };
       mediaRef.current.start();
@@ -57,10 +62,7 @@ export default function Chat() {
     setRec(false);
   };
 
-  const clearHistory = async () => {
-    await chatAPI.clearHistory().catch(() => {});
-    setMessages([]);
-  };
+  const clearHistory = () => setMessages([]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 56px)' }}>

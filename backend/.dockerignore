@@ -1,0 +1,14 @@
+.env
+.venv
+venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.coverage
+tests
+generated_files/*
+!generated_files/.gitkeep
+vault_files/*
+!vault_files/.gitkeep
+chroma_db
+.cache

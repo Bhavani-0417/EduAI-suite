@@ -23,7 +23,7 @@ from app.utils.upload_validation import (
 from app.utils.vault_security import is_share_expired
 
 logger = logging.getLogger(__name__)
-OUTPUT_DIR = os.path.abspath("vault_files")
+OUTPUT_DIR = os.path.abspath(os.getenv("VAULT_FILES_DIR", "vault_files"))
 
 
 def _resolve_vault_path(stored_path: str) -> str:

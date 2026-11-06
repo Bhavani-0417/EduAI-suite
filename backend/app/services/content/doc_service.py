@@ -10,7 +10,7 @@ from docx.oxml import OxmlElement
 from app.services.ai.content_planner import plan_document
 
 
-OUTPUT_DIR = "generated_files"
+OUTPUT_DIR = os.getenv("GENERATED_FILES_DIR", "generated_files")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 

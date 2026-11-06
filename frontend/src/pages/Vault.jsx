@@ -179,6 +179,9 @@ export default function Vault() {
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: 6 }}>
+                        <button onClick={() => vaultAPI.downloadDocument(doc.id)} style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid #1e2230', background: '#0d0f14', color: '#9ca3af', fontSize: 12, cursor: 'pointer' }}>
+                          ⬇ Download
+                        </button>
                         <button onClick={() => share(doc.id)} style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid #1e4620', background: '#0c1a0e', color: '#10b981', fontSize: 12, cursor: 'pointer' }}>
                           🔗 Share
                         </button>
